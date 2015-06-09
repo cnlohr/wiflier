@@ -18,13 +18,11 @@ Address 	Size 	Name 	Description
 
 TODO:
 
-*Is it possible to monitor all the sensors?
-*Try one-shotting the sensors.
-*Add WebGL
-*Add WebSockets
+*Try one-shotting the sensors (currently they're in free-run)
+*Add WebGL?
+*Add WebSockets?
+*Explain how commands work.
 *Try turning off pullups on the AVR
-*Timeout the AVR.
-*Separate the control.c back out.
-*Enable softap-mode-scanning
+*Separate the control.c into different parts.
 
 Project moved to github. https://github.com/cnlohr/wiflier
