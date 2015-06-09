@@ -3,7 +3,7 @@
 #include "os_type.h"
 #include "mem.h"
 #include "spi_flash.h"
-#include "lsm9ds0.h"
+#include "lsm9ds1.h"
 #include "bmp085.h"
 #include "osapi.h"
 #include "mem.h"
