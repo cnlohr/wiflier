@@ -39,6 +39,7 @@ int32_t  tempNow;  //tenths of degrees C
 
 int		  voltNow;
 uint8_t  gMotors[4];
+uint8_t  motors_automatic = 0; //whether in flight? Maybe?
 
 //Used only for centering.
 int32_t  gyrIIR[3];
@@ -158,7 +159,7 @@ void ICACHE_FLASH_ATTR controltimer()
 	r2 = ReadAGM( sensordata );
 
 	//Hacky (For now)
-	gMotors[0] = gMotors[1] = gMotors[2] = gMotors[3] = 0x80;
+//	gMotors[0] = gMotors[1] = gMotors[2] = gMotors[3] = 0x80;
 
 	voltNow = RunAVRTool( gMotors );
 
@@ -316,7 +317,7 @@ void ICACHE_FLASH_ATTR issue_command(void *arg, char *pusrdata, unsigned short l
 	case 'u': case 'U': //Stream Data, RAW (U0, U1)
 		if( pusrdata[1] == '0' )
 		{
-			espconn_sent( pespconn, "T0\r\n", 4 );
+			espconn_sent( pespconn, "U0\r\n", 4 );
 			stream_data_raw = 0;
 		}
 		else if( pusrdata[1] == '1' )
@@ -367,8 +368,45 @@ void ICACHE_FLASH_ATTR issue_command(void *arg, char *pusrdata, unsigned short l
 
 	case 'c': case 'C':
 	{
-		//Connection info.
+		//Connection info. (not yet implemented, should tell us what our AP is, who we're connected to, etc. )
+		break;
 	}
+
+	case 'M': case 'm':
+	{
+		if( len > 1 )
+		switch( pusrdata[1] )
+		{
+		case 'A': case 'a':
+			motors_automatic = 1;
+			espconn_sent( pespconn, "MA\r\n", 4 );
+			break;
+		case 'M': case 'm':
+			espconn_sent( pespconn, "MM\r\n", 4 );
+			motors_automatic = 0;
+			break;
+		case '0':
+		case '1':
+		case '2':
+		case '3':
+		{
+			const char * colon = (const char *) ets_strstr( (char*)&pusrdata[2], ":" );
+			if( colon )
+			{
+				int mtr = pusrdata[1]-'0';
+				int val = my_atoi( colon+1 );
+				char sto[128];
+				int sl = ets_sprintf( sto, "M%d:%d\r\n", mtr, val );
+				espconn_sent( pespconn, sto, sl );
+				gMotors[mtr] = val;
+			}
+			break;
+		}
+
+		}
+		break;
+	}
+
 	case 'f': case 'F':  //Flashing commands (F_)
 	{
 		flashchip->chip_size = 0x01000000;

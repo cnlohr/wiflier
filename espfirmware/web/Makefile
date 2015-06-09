@@ -1,4 +1,4 @@
-all : page.dat push execute_reflash
+all : execute_reflash page.dat push 
 
 mfsmaker : mfsmaker.c
 	gcc -o $@ $^
