@@ -1,4 +1,5 @@
 
+This program needs to be compiled using the esp_iot_sdk_v1.1.0.
 
 Memory layout:
 
