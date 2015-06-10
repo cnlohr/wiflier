@@ -35,7 +35,8 @@ int32_t  gyrNow[3];
 int32_t	 accNow[3];
 int32_t  magNow[3];
 int32_t  barNow;
-int32_t  tempNow;  //tenths of degrees C
+int32_t  tempNow;  //tenths of degrees 
+int16_t  targetAxes[4]; //Expected -1000..1000 (L/R, FWD/BKD, Orient, elevator)
 
 int		  voltNow;
 uint8_t  gMotors[4];
@@ -103,7 +104,7 @@ struct totalscan_t
 {
 	char name[32];
 	char mac[18]; //string
-	uint8_t rssi;
+	int8_t rssi;
 	uint8_t channel;
 	uint8_t encryption;
 } totalscan[MAX_STATIONS];
@@ -158,11 +159,6 @@ void ICACHE_FLASH_ATTR controltimer()
 
 	r2 = ReadAGM( sensordata );
 
-	//Hacky (For now)
-//	gMotors[0] = gMotors[1] = gMotors[2] = gMotors[3] = 0x80;
-
-	voltNow = RunAVRTool( gMotors );
-
 	if( ( systemFrame & 0x07 ) == 0 )
 		pressure = GetBMP085();
 	else if( ( systemFrame & 0x07 ) == 2 )
@@ -211,6 +207,75 @@ void ICACHE_FLASH_ATTR controltimer()
 		float magarea = ((int32_t)settings.magmax[i] - (int32_t)settings.magmin[i]) * 0.5;
 		calmag[i] = ( ((int32_t)magNow[i]<<MAGIIRDEP) - (int32_t)settings.magmin[i] ) / magarea - 1.0;
 	}
+
+
+	//Hacky (For now)
+//	gMotors[0] = gMotors[1] = gMotors[2] = gMotors[3] = 0x80;
+
+	//Closed loop control.
+	if( motors_automatic )
+	{
+		int32_t spin = ((int32_t)(calgyro[2]*4000.0f));  //POSITIVE = moving counter-clockwise.
+
+		int32_t leftright = ((int32_t)(calacc[0]*1000.0f)); //LEFT = POSITIVE, RIGHT = NEGATIVE
+		int32_t fwdbak = ((int32_t)(calacc[1]*1000.0f));    //FWD = NEGATIVE, REVERSE = POSITIVE
+
+		//Joystick foward = negative
+		//Joystick right = positive.
+
+		leftright += targetAxes[0]; //Positve = move right
+		fwdbak -= targetAxes[1];   //Positive = 
+		spin -= targetAxes[2];
+
+		//M0: Front, right, clockwise
+		//M1: Rear, right, counter-clockwise
+		//M2: Rear, left, clockwise
+		//M3: Front, left, counter-clockwise
+
+		int m1 = -leftright - fwdbak - spin;
+		int m2 =  leftright - fwdbak + spin;
+		int m3 =  leftright + fwdbak - spin;
+		int m4 = -leftright + fwdbak + spin;
+
+		ets_sprintf( buffer, "MD\t%d\t%d\t%d\t%d\n", m1, m2, m3, m4 );
+		if( pespconn )
+			espconn_sent( pespconn, buffer, ets_strlen( buffer ) );
+
+		m1 = (m1 + (targetAxes[3]))>>6;
+		m2 = (m2 + (targetAxes[3]))>>6;
+		m3 = (m3 + (targetAxes[3]))>>6;
+		m4 = (m4 + (targetAxes[3]))>>6;
+
+		if( m1 < 0 ) m1 = 0;
+		if( m2 < 0 ) m2 = 0;
+		if( m3 < 0 ) m3 = 0;
+		if( m4 < 0 ) m4 = 0;
+
+		if( m1 > 200 ) m1 = 200;
+		if( m2 > 200 ) m2 = 200;
+		if( m3 > 200 ) m3 = 200;
+		if( m4 > 200 ) m4 = 200;
+
+		gMotors[0] = m1;
+		gMotors[1] = m2;
+		gMotors[2] = m3;
+		gMotors[3] = m4;
+
+
+
+	}
+	else
+	{
+		for( i = 0; i < 4; i++ )
+		{
+			if( gMotors[i] > 0 ) gMotors[i]--;
+		}
+	}
+
+
+
+	voltNow = RunAVRTool( gMotors );
+
 
 
 	if( in_range_setting )
@@ -334,6 +399,26 @@ void ICACHE_FLASH_ATTR issue_command(void *arg, char *pusrdata, unsigned short l
 		DoZero();
 		espconn_sent( pespconn, "Z\r\n", 4 );
 		break;
+	case 'j': case 'J': //Joystick input (Bank Right, Bank Forward, Turn, Elevator)
+	{
+		const char * n1 = (char*)&pusrdata[1];
+		const char * n2 = (const char *) ets_strstr( n1, ":" );
+		const char * n3 = (const char *) ets_strstr( n2, ":" );
+		const char * n4 = (const char *) ets_strstr( n3, ":" );
+
+		if( !n1 || !n2 || !n3 || !n4 )
+		{
+			espconn_sent( pespconn, "!J\r\n", 4 );
+		}
+
+		targetAxes[0] = my_atoi(n1);
+		targetAxes[1] = my_atoi(n2);
+		targetAxes[2] = my_atoi(n3);
+		targetAxes[3] = my_atoi(n4);
+
+		espconn_sent( pespconn, "J\r\n", 3 );
+		break;
+	}
 	case 'r': case 'R': //Start/Stop Range Setting (R1, R0) When in range setting, rotate ESP slowly.
 		if( pusrdata[1] == '1' )
 		{
@@ -352,12 +437,12 @@ void ICACHE_FLASH_ATTR issue_command(void *arg, char *pusrdata, unsigned short l
 			char buffer[256];
 			char * buffend;
 			buffend = buffer;
-			espconn_sent( pespconn, "P\r\n", 3 );
-			buffend += ets_sprintf(buffend, "#%d,%d,%d\r\n",((int32_t)(settings.gyrocenter[0])), ((int32_t)(settings.gyrocenter[1])), ((int32_t)(settings.gyrocenter[2])) );
-			buffend += ets_sprintf(buffend, "#%d,%d,%d\r\n",((int32_t)(settings.accelmin[0])), ((int32_t)(settings.accelmin[1])), ((int32_t)(settings.accelmin[2])) );
-			buffend += ets_sprintf(buffend, "#%d,%d,%d\r\n",((int32_t)(settings.accelmax[0])), ((int32_t)(settings.accelmax[1])), ((int32_t)(settings.accelmax[2])) );
-			buffend += ets_sprintf(buffend, "#%d,%d,%d\r\n",((int32_t)(settings.magmin[0])), ((int32_t)(settings.magmin[1])), ((int32_t)(settings.magmin[2])) );
-			buffend += ets_sprintf(buffend, "#%d,%d,%d\r\n",((int32_t)(settings.magmax[0])), ((int32_t)(settings.magmax[1])), ((int32_t)(settings.magmax[2])) );
+			buffend += ets_sprintf(buffend, "P6\r\n#GC\t%d\t%d\t%d\r\n",((int32_t)(settings.gyrocenter[0])), ((int32_t)(settings.gyrocenter[1])), ((int32_t)(settings.gyrocenter[2])) );
+			buffend += ets_sprintf(buffend, "#AC\t%d\t%d\t%d\r\n",((int32_t)(settings.acccenter[0])), ((int32_t)(settings.acccenter[1])), ((int32_t)(settings.acccenter[2])) );
+			buffend += ets_sprintf(buffend, "#AL\t%d\t%d\t%d\r\n",((int32_t)(settings.accelmin[0])), ((int32_t)(settings.accelmin[1])), ((int32_t)(settings.accelmin[2])) );
+			buffend += ets_sprintf(buffend, "#AH\t%d\t%d\t%d\r\n",((int32_t)(settings.accelmax[0])), ((int32_t)(settings.accelmax[1])), ((int32_t)(settings.accelmax[2])) );
+			buffend += ets_sprintf(buffend, "#ML\t%d\t%d\t%d\r\n",((int32_t)(settings.magmin[0])), ((int32_t)(settings.magmin[1])), ((int32_t)(settings.magmin[2])) );
+			buffend += ets_sprintf(buffend, "#MH\t%d\t%d\t%d\r\n",((int32_t)(settings.magmax[0])), ((int32_t)(settings.magmax[1])), ((int32_t)(settings.magmax[2])) );
 			espconn_sent( pespconn, buffer, ets_strlen( buffer ) );
 			break;
 		}
@@ -366,17 +451,21 @@ void ICACHE_FLASH_ATTR issue_command(void *arg, char *pusrdata, unsigned short l
 		espconn_sent( pespconn, "S\r\n", 3 );
 		break;
 
-	case 'c': case 'C':
-	{
-		//Connection info. (not yet implemented, should tell us what our AP is, who we're connected to, etc. )
-		break;
-	}
-
 	case 'M': case 'm':
 	{
 		if( len > 1 )
 		switch( pusrdata[1] )
 		{
+		case '?':
+		{
+			char buffer[256];
+			char * buffend;
+			buffend = buffer;
+
+			buffend += ets_sprintf(buffend, "M?%d:%d:%d:%d:%d\r\n", motors_automatic, gMotors[0], gMotors[1], gMotors[2], gMotors[3] );
+			espconn_sent( pespconn, buffer, ets_strlen( buffer ) );
+			break;
+		}
 		case 'A': case 'a':
 			motors_automatic = 1;
 			espconn_sent( pespconn, "MA\r\n", 4 );
@@ -444,9 +533,11 @@ void ICACHE_FLASH_ATTR issue_command(void *arg, char *pusrdata, unsigned short l
 		case 'm': case 'M': //Execute the flash re-writer
 			{
 				char ret[128];
+				int n = ets_sprintf( ret, "FM" );
+				espconn_sent( pespconn, ret, n );
 				int r = (*GlobalRewriteFlash)( &pusrdata[2], len-2 );
-				int n = ets_sprintf( ret, "FMFailure: %d", r );
-				espconn_sent( pespconn, ret, ets_strlen( ret ) );
+				n = ets_sprintf( ret, "!FM%d", r );
+				espconn_sent( pespconn, ret, n );
 			}
 		case 'w': case 'W':	//Flash Write (FW#\n) <- # = byte pos.
 			if( colon )
@@ -607,7 +698,7 @@ void ICACHE_FLASH_ATTR issue_command(void *arg, char *pusrdata, unsigned short l
 				
 				for( i = 0; i < scanplace; i++ )
 				{
-					buffend += ets_sprintf( buffend, "%s\t%s\t%d\t%d\t%s\n", 
+					buffend += ets_sprintf( buffend, "#%s\t%s\t%d\t%d\t%s\n", 
 						totalscan[i].name, totalscan[i].mac, totalscan[i].rssi, totalscan[i].channel, enctypes[totalscan[i].encryption] );
 				}
 
@@ -615,7 +706,6 @@ void ICACHE_FLASH_ATTR issue_command(void *arg, char *pusrdata, unsigned short l
 
 			}
 			break;
-
 		}
 		break;
 	}
@@ -651,26 +741,26 @@ int ICACHE_FLASH_ATTR FillRaw( char * buffend )
 	int i;
 	char * buffstart = buffend;
 
-	buffend += ets_sprintf( buffend, "UD:" );
+	buffend += ets_sprintf( buffend, "UD\t" );
 
-	buffend += ets_sprintf( buffend, "%9d,", systemFrame );
+	buffend += ets_sprintf( buffend, "%9d\t", systemFrame );
 
 	for( i = 0; i < 3; i++ )
 	{
-		buffend += ets_sprintf( buffend, "%6d,", ((int32_t)(gyrNow[i])) );
+		buffend += ets_sprintf( buffend, "%6d\t", ((int32_t)(gyrNow[i])) );
 	}
 
 	for( i = 0; i < 3; i++ )
 	{
-		buffend += ets_sprintf( buffend, "%6d,", ((int32_t)(accNow[i])) );
+		buffend += ets_sprintf( buffend, "%6d\t", ((int32_t)(accNow[i])) );
 	}
 
 	for( i = 0; i < 3; i++ )
 	{
-		buffend += ets_sprintf( buffend, "%6d,", ((int32_t)(magNow[i])) );
+		buffend += ets_sprintf( buffend, "%6d\t", ((int32_t)(magNow[i])) );
 	}
 
-	buffend += ets_sprintf( buffend, "%6d, %3d, %3d\r\n", barNow, tempNow, voltNow );
+	buffend += ets_sprintf( buffend, "%6d\t%3d\t%3d\r\n", barNow, tempNow, voltNow );
 
 	return buffend - buffstart;
 }
@@ -680,26 +770,26 @@ int ICACHE_FLASH_ATTR FillCal( char * buffend )
 	int i;
 	char * buffstart = buffend;
 
-	buffend += ets_sprintf( buffend, "TD:" );
+	buffend += ets_sprintf( buffend, "TD\t" );
 
-	buffend += ets_sprintf( buffend, "%9d,", systemFrame );
+	buffend += ets_sprintf( buffend, "%9d\t", systemFrame );
 
 	for( i = 0; i < 3; i++ )
 	{
-		buffend += ets_sprintf( buffend, "%6d,", ((int32_t)(calgyro[i]*1000.0f)) );
+		buffend += ets_sprintf( buffend, "%6d\t", ((int32_t)(calgyro[i]*1000.0f)) );
 	}
 
 	for( i = 0; i < 3; i++ )
 	{
-		buffend += ets_sprintf( buffend, "%6d,", ((int32_t)(calacc[i]*1000.0f)) );
+		buffend += ets_sprintf( buffend, "%6d\t", ((int32_t)(calacc[i]*1000.0f)) );
 	}
 
 	for( i = 0; i < 3; i++ )
 	{
-		buffend += ets_sprintf( buffend, "%6d,", ((int32_t)(calmag[i]*1000.f)) );
+		buffend += ets_sprintf( buffend, "%6d\t", ((int32_t)(calmag[i]*1000.f)) );
 	}
 
-	buffend += ets_sprintf( buffend, "%6d, %3d\r\n", barIIR>>BARIIRDEP, voltNow );
+	buffend += ets_sprintf( buffend, "%6d\t%3d\t%3d\r\n", barIIR>>BARIIRDEP, tempNow, voltNow );
 	return buffend - buffstart;
 }
 

@@ -154,7 +154,7 @@ int ReadAGM( int16_t * LINROTMAG )
 
 	SendStart();
 	SendByte( AG_ADDY | 1 );
-	LINROTMAG[9] = LR16(0); //Temp
+	LINROTMAG[9] = LR16(1); //Temp
 	SendStop();
 
 

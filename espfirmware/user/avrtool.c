@@ -5,6 +5,7 @@
 int SetupAVRTool()
 {
 	int c = 0;
+
 	SendStart();
 	c |= SendByte( 0x20 );
 	c |= SendByte( 0x01 );
@@ -25,21 +26,28 @@ int RunAVRTool( unsigned char * motors )
 retry:
 	SendStart();
 	ca |= SendByte( 0x20 );
-	ca |= SendByte( 0x01 );
-	ca |= SendByte( motors[0] );
-	ca |= SendByte( motors[1] );
-	ca |= SendByte( motors[2] );
-	ca |= SendByte( motors[3] );
-	SendStop();
+	ca |= SendByte( 31 );
+
+	//I have no idea why we have to do this.  If we don't have some extra 0's here, the motors will go crazy and the AVR will lose its mind.
+	ca |= SendByte( 0x00 ); //unused.
+	ca |= SendByte( 0x00 ); //unused.
 
 	if( ca )
 	{
+		SendStop();
 		tries++;
 		ca = 0;
 		if( tries < 3 )
 			goto retry;
 		return 2;
 	}
+
+	ca |= SendByte( motors[0] );
+	ca |= SendByte( motors[1] );
+	ca |= SendByte( motors[2] );
+	ca |= SendByte( motors[3] );
+	SendStop();
+
 
 	SendStart();
 	cb |= SendByte( 0x21 );

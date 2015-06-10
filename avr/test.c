@@ -3,6 +3,13 @@
 #include <avr/sleep.h>
 #include <util/delay.h>
 
+//Create a I2C Slave at address 0x20/0x21.
+//I2c address 33-36 = motors (0..255) (Read/Write)
+//I2c address 37 = 1.1v ADC value compared to vBat (Read only)
+
+//TODO: Why do things get so jankey if we don't have a few extra writes?
+//TODO: Make motor rampdown more gracious?
+
 #define TIMEOUT 65535
 #define TIMEOUT_RAMP 20000
 
@@ -15,7 +22,7 @@ int main( )
 {
 	CCP = 0xD8;
 	CLKPR = 0x00;  //Disable scaling.
-	OSCCAL0 = 0xFF;
+	OSCCAL0 = 0x80;
 
 	//We don't use interrupts in this program.
 	cli();
@@ -70,6 +77,7 @@ int main( )
 	{
 		if( TWSSRA & _BV(TWC) ) TWSSRA |= _BV(TWC);
 		if( TWSSRA & _BV(TWBE) ) TWSSRA |= _BV(TWBE);
+
 		if( timeout == 0 )
 		{
 			if( OCR1BL < 255 ) OCR1BL++;
@@ -88,12 +96,12 @@ int main( )
 			{
 				switch( address )
 				{
-				case 1:  TWSD = 255-OCR1BL; break;
-				case 2:  TWSD = 255-OCR1AL; break;
-				case 3:  TWSD = 255-OCR2BL; break;
-				case 4:  TWSD = 255-OCR0B; break;
-				case 5:  TWSD = ADCH; break;
-				case 6:  TWSD = 0xAA; break;
+				case 33:  TWSD = 255-OCR1BL; break;
+				case 34:  TWSD = 255-OCR1AL; break;
+				case 35:  TWSD = 255-OCR2BL; break;
+				case 36:  TWSD = 255-OCR0B; break;
+				case 37:  TWSD = ADCH; break;
+				case 38:  TWSD = 0xAA; break;
 				default: TWSD = 0;
 				}
 				TWSCRB = _BV(TWCMD1) | _BV(TWCMD0); //Send ACK
@@ -117,19 +125,19 @@ int main( )
 					default:
 						//unused
 						break;
-					case 1: //PWM 0
+					case 33: //PWM 0
 						OCR1BL = 255-operation;
 						timeout = TIMEOUT;
 						break;
-					case 2: //PWM 1
+					case 34: //PWM 1
 						OCR1AL = 255-operation;
 						timeout = TIMEOUT;
 						break;
-					case 3: //PWM 2
+					case 35: //PWM 2
 						OCR2BL = 255-operation;
 						timeout = TIMEOUT;
 						break;
-					case 4: //PWM 3
+					case 36: //PWM 3
 						OCR0B = 255-operation;
 						timeout = TIMEOUT;
 						break;
