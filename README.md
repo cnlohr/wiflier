@@ -73,6 +73,8 @@ The AVR firmware requires avr-libc-1.8.0 and avr-gcc-4.8.1 at a minimum.  To bui
 
 ## Memory layout:
 
+We use a bit of a modified take on the old memory layout since, while we support OTA upgrades, we do so in a different way than the normal way.
+
 | Address | Size  | Name / Description            |
 | ------- |:-----:| ----------------------------- |
 | 00000h  | 40k   | 0x00000.bin, IRAM Code        | 
@@ -165,6 +167,7 @@ To flash, follow the following steps:
     * Reversing the order will not program, but will not damage the part.
     * You can determine proper order by unplugging power to the quadcopter and flipping the connector around until it powers on.  Powering on indicates proper order.
   5. Initiate programming of the AVR.
+	* Failures may indicate the ESP is locking the bus lines.
     * Failures may indicate not all the pins are making contact.
     * Failures may indicate the programming header is reversed.
     * Failures may indicate other problems in the toolchain, i.e. not running programmer as root or having proper credentials.
@@ -172,7 +175,7 @@ To flash, follow the following steps:
   7. Use the "B1" command to bring the ESP8266 Back online.
 
 
-## TODO:
+## TODO
 
 ### Software modifications:
 
@@ -190,7 +193,7 @@ To flash, follow the following steps:
 
 * Consider making the sensors slaves to the AVR, and having the ESP communicate only to the AVR.
 * Consider using the MPL3115A2 instead of the BMP085
-
+* I keep looking at the lack of pullups on the I2C and it makes me nervous when we're running the motor controllers.
 
 ## Commands
 
