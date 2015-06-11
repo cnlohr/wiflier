@@ -205,6 +205,10 @@ As a warning, in some places \r\n is used and in others \n is used.  You should 
 ### Bn (B1 / B0):  Turn main control loop on/off
 Turning the main control loop off will stop all I2C bus communication and resolving what to do in the control loop.  That also means telemetry will stop.
 
+
+### D
+Reboot the system.  This includes the bootloader.  If GPIO0 is held low, the serial bootloader will be initiated.
+
 ### Tn (T1 / T0):  Turn streaming of calibrated, filtered telemetry data on/off
 This will either continously stream, or turn off streaming of the calibrated telemetry data from the sensors.  Calibration is done using the Rn and Z commands.  Data is tab deliniated.
 
