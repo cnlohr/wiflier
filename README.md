@@ -186,7 +186,6 @@ To flash, follow the following steps:
 * Separate the control.c into different parts.
 * Have some minimal levels of protection for writing to flash, i.e. maybe only allow writing to 0x80000+
 * Send some sort of broadcast or discovery packets.
-* If a connection fails in mode 1, and it switches to mode 2, it should still wake up in mode 1 next time.  It does not.
 * Figure out why the AVR needs soooo many bytes before it accepts data.
 
 ### Hardware modifications:

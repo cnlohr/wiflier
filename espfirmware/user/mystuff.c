@@ -1,5 +1,7 @@
 #include "mystuff.h"
 
+const char * enctypes[6] = { "open", "wep", "wpa", "wpa2", "wpa_wpa2", "max" };
+
 char generic_print_buffer[384];
 char generic_buffer[1500];
 char * generic_ptr;

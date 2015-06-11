@@ -49,9 +49,12 @@ int32_t  magIIR[3];
 int32_t  barIIR;
 
 
-float calgyro[3];
-float calacc[3];
-float calmag[3];
+uint32_t calgyro[3];
+uint32_t calacc[3];
+uint32_t calmag[3];
+
+int16_t sensordata[10];
+int8_t  sensorstatus;
 
 int bus_online = 1;
 
@@ -75,10 +78,13 @@ void ICACHE_FLASH_ATTR StartRange()
 	ResetIIR();
 	for( i = 2; i < 3; i++ )
 	{
-		settings.accelmin[i] = accIIR[i];
-		settings.accelmax[i] = accIIR[i];
-		settings.magmin[i] = 0;
-		settings.magmax[i] = 0;
+		settings.accelmin[i] = accIIR[i]-1;
+		settings.accelmax[i] = accIIR[i]+1;
+	}
+	for( i = 0; i < 3; i++ )
+	{
+		settings.magmin[i] = magIIR[i]-1;
+		settings.magmax[i] = magIIR[i]+1;
 	}
 	
 }
@@ -110,7 +116,7 @@ struct totalscan_t
 } totalscan[MAX_STATIONS];
 int scanplace = 0;
 
-const char * enctypes[] = { "open", "wep", "wpa", "wpa2", "wpa_wpa2", "max" };
+
 
 static void ICACHE_FLASH_ATTR scandone(void *arg, STATUS status)
 {
@@ -148,16 +154,29 @@ static void ICACHE_FLASH_ATTR scandone(void *arg, STATUS status)
 //Timer event.
 void ICACHE_FLASH_ATTR controltimer()
 {
-	int16_t sensordata[10];
 	int i;
 	char buffer[128];
 	char * buffend;
 	buffend = buffer;
-	uint8_t r2;
+	static int agmfailures = 0;
 
 	if( !bus_online ) return;
 
-	r2 = ReadAGM( sensordata );
+	sensorstatus = ReadAGM( sensordata );
+
+	if( sensorstatus < -10 )
+	{
+		agmfailures++;
+		if( agmfailures > 10 )
+		{
+			agmfailures = 0;
+			SetupLSM();
+		}
+	}
+	else
+	{
+		agmfailures = 0;
+	}
 
 	if( ( systemFrame & 0x07 ) == 0 )
 		pressure = GetBMP085();
@@ -179,16 +198,17 @@ void ICACHE_FLASH_ATTR controltimer()
 		gyrNow[i] = sensordata[i+3];
 		gyrIIR[i] = ( gyrIIR[i] - ( gyrIIR[i] >> GYRIIRDEP ) ) + gyrNow[i];
 
-		calgyro[i] = (float)(((int32_t)gyrNow[i]<<GYRIIRDEP) - (int32_t)settings.gyrocenter[i])*(float)(GYROUNITS*GYRIIRDIV);
+		calgyro[i] = ( (int32_t)gyrNow[i] - ((int32_t)settings.gyrocenter[i]>>GYRIIRDEP) );
 	}
 
 	for( i = 2; i < 3; i++ )
 	{
 		accNow[i] = sensordata[i];
-		accIIR[i] = ( accIIR[i] - ( accIIR[i] >> ACCIIRDEP ) ) + accNow[i];
+		accIIR[i] = ( accIIR[i] - ( accIIR[i] >> ACCIIRDEP ) ) + (int32_t)accNow[i];
 
-		float calarea = ((int32_t)settings.accelmax[i] - (int32_t)settings.accelmin[i]) * 0.5;
-		calacc[i] = ( ((int32_t)accNow[i]<<ACCIIRDEP) - (int32_t)settings.accelmin[i] ) / calarea - 1.0;
+		int32_t calarea = ((int32_t)settings.accelmax[i] - (int32_t)settings.accelmin[i]) >> (ACCIIRDEP+1);
+		if( calarea == 0 ) calarea = 1;
+		calacc[i] = 1000 * ( ((int32_t)accNow[i]) - ((int32_t)settings.accelmin[i]>>ACCIIRDEP) ) / calarea - 1000;
 	}
 
 	for( i = 0; i < 2; i++ )
@@ -196,16 +216,17 @@ void ICACHE_FLASH_ATTR controltimer()
 		accNow[i] = sensordata[i];
 		accIIR[i] = ( accIIR[i] - ( accIIR[i] >> ACCIIRDEP ) ) + accNow[i];
 
-		calacc[i] = (float)(((int32_t)accNow[i]<<ACCIIRDEP) - (int32_t)settings.acccenter[i])*((float)ACCIIRDIV*ACCUNITS);
+		calacc[i] = (((int32_t)accNow[i]) - ((int32_t)settings.acccenter[i]>>ACCIIRDEP));
 	}
 
 
 	for( i = 0; i < 3; i++ )
 	{
 		magNow[i] = sensordata[i+6];
-		magIIR[i] = ( magIIR[i] - ( magIIR[i] >> MAGIIRDEP ) ) + magNow[i];
-		float magarea = ((int32_t)settings.magmax[i] - (int32_t)settings.magmin[i]) * 0.5;
-		calmag[i] = ( ((int32_t)magNow[i]<<MAGIIRDEP) - (int32_t)settings.magmin[i] ) / magarea - 1.0;
+		magIIR[i] = ( magIIR[i] - ( magIIR[i] >> MAGIIRDEP ) ) + (int32_t)magNow[i];
+		int32_t magarea = ((int32_t)settings.magmax[i] - (int32_t)settings.magmin[i]) >> (MAGIIRDEP+1);
+		if( magarea == 0 ) magarea = 1;
+		calmag[i] = 1000 * ( ((int32_t)magNow[i]) - ((int32_t)settings.magmin[i]>>MAGIIRDEP) ) / magarea - 1000;
 	}
 
 
@@ -215,10 +236,9 @@ void ICACHE_FLASH_ATTR controltimer()
 	//Closed loop control.
 	if( motors_automatic )
 	{
-		int32_t spin = ((int32_t)(calgyro[2]*4000.0f));  //POSITIVE = moving counter-clockwise.
-
-		int32_t leftright = ((int32_t)(calacc[0]*1000.0f)); //LEFT = POSITIVE, RIGHT = NEGATIVE
-		int32_t fwdbak = ((int32_t)(calacc[1]*1000.0f));    //FWD = NEGATIVE, REVERSE = POSITIVE
+		int32_t spin = ((int32_t)(calgyro[2]));  //POSITIVE = moving counter-clockwise.
+		int32_t leftright = ((int32_t)(calacc[0])); //LEFT = POSITIVE, RIGHT = NEGATIVE
+		int32_t fwdbak = ((int32_t)(calacc[1]));    //FWD = NEGATIVE, REVERSE = POSITIVE
 
 		//Joystick foward = negative
 		//Joystick right = positive.
@@ -280,14 +300,16 @@ void ICACHE_FLASH_ATTR controltimer()
 
 	if( in_range_setting )
 	{
-		for( i = 0; i < 3; i++ )
+		for( i = 2; i < 3; i++ )
 		{
 			if( accIIR[i] > settings.accelmax[i] )
 				settings.accelmax[i] = accIIR[i];
 
 			if( accIIR[i] < settings.accelmin[i] )
 				settings.accelmin[i] = accIIR[i];
-
+		}
+		for( i = 0; i < 3; i++ )
+		{
 			if( magIIR[i] > settings.magmax[i] )
 				settings.magmax[i] = magIIR[i];
 
@@ -345,7 +367,9 @@ void ICACHE_FLASH_ATTR issue_command(void *arg, char *pusrdata, unsigned short l
 
 	switch( pusrdata[0] )
 	{
-
+	case 'd': case 'D':
+		((void(*)())0x40000080)();
+		break;
 	case 'b': case 'B':
 		if( pusrdata[1] == '0' )
 		{
@@ -491,7 +515,6 @@ void ICACHE_FLASH_ATTR issue_command(void *arg, char *pusrdata, unsigned short l
 			}
 			break;
 		}
-
 		}
 		break;
 	}
@@ -643,6 +666,7 @@ void ICACHE_FLASH_ATTR issue_command(void *arg, char *pusrdata, unsigned short l
 			break;
 		case '2':
 			{
+				wifi_set_opmode_current( 1 );
 				wifi_set_opmode( 2 );
 				espconn_sent( pespconn, "W2\r\n", 4 );
 			}
@@ -730,7 +754,7 @@ void ICACHE_FLASH_ATTR ControlInit()
 void ICACHE_FLASH_ATTR SaveSettings()
 {
 	flashchip->chip_size = 0x01000000;
-	spi_flash_erase_sector( 0x80 );
+	spi_flash_erase_sector( 0x3D000/4096 );
 	spi_flash_write( 0x3D000, (uint32*)&settings, sizeof( settings ) );
 	flashchip->chip_size = 0x00080000;
 }
@@ -760,7 +784,7 @@ int ICACHE_FLASH_ATTR FillRaw( char * buffend )
 		buffend += ets_sprintf( buffend, "%6d\t", ((int32_t)(magNow[i])) );
 	}
 
-	buffend += ets_sprintf( buffend, "%6d\t%3d\t%3d\r\n", barNow, tempNow, voltNow );
+	buffend += ets_sprintf( buffend, "%6d\t%3d\t%3d\t%d\r\n", barNow, tempNow, voltNow, sensorstatus );
 
 	return buffend - buffstart;
 }
@@ -776,20 +800,20 @@ int ICACHE_FLASH_ATTR FillCal( char * buffend )
 
 	for( i = 0; i < 3; i++ )
 	{
-		buffend += ets_sprintf( buffend, "%6d\t", ((int32_t)(calgyro[i]*1000.0f)) );
+		buffend += ets_sprintf( buffend, "%6d\t", calgyro[i] );
 	}
 
 	for( i = 0; i < 3; i++ )
 	{
-		buffend += ets_sprintf( buffend, "%6d\t", ((int32_t)(calacc[i]*1000.0f)) );
+		buffend += ets_sprintf( buffend, "%6d\t", calacc[i] );
 	}
 
 	for( i = 0; i < 3; i++ )
 	{
-		buffend += ets_sprintf( buffend, "%6d\t", ((int32_t)(calmag[i]*1000.f)) );
+		buffend += ets_sprintf( buffend, "%6d\t", calmag[i] );
 	}
 
-	buffend += ets_sprintf( buffend, "%6d\t%3d\t%3d\r\n", barIIR>>BARIIRDEP, tempNow, voltNow );
+	buffend += ets_sprintf( buffend, "%6d\t%3d\t%3d\t%d\r\n", barIIR>>BARIIRDEP, tempNow, voltNow, sensorstatus );
 	return buffend - buffstart;
 }
 

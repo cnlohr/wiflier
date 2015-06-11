@@ -120,3 +120,20 @@ unsigned char GetByte( uint8_t send_nak )
 	return ret;
 }
 
+void my_i2c_delay()
+{
+	//If i = 2, there are a lot of errors, with 1.5k pullups on the I2C.
+	//If i = 3, the AVR can't keep up.
+	//If i = 4, things are hokey.
+	//If i = 5, things are even worse
+	//If i = 6..8, splended, but AVR is super flakey.
+	//If i = 9, AVR is almost
+	//If i = 10, AVR is solid. Let's go above there...
+	uint8_t i = 15;
+	do
+	{
+		asm("nop");	
+	} while( i-- );
+}
+
+

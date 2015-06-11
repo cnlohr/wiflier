@@ -42,8 +42,8 @@ static ICACHE_FLASH_ATTR void echo()
 
 static ICACHE_FLASH_ATTR void issue()
 {
-	char mydat[256];
-	int len = URLDecode( mydat, 256, curhttp->pathbuffer+9 );
+	char mydat[512];
+	int len = URLDecode( mydat, 512, curhttp->pathbuffer+9 );
 
 	issue_command(curhttp->socket, mydat, len );
 

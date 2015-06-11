@@ -10,7 +10,9 @@
 #define I2CSDA 12
 #define I2CSCL 14
 
-#define I2CDELAY ets_delay_us( 1 );
+#define I2CDELAY my_i2c_delay();
+//#define I2CDELAY ets_delay_us( 1 );
+void my_i2c_delay();
 
 //Assumes I2CGet was already called.
 void ConfigI2C();

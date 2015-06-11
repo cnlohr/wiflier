@@ -64,7 +64,7 @@ procTask(os_event_t *events)
 
 		if( stat == STATION_WRONG_PASSWORD || stat == STATION_NO_AP_FOUND || stat == STATION_CONNECT_FAIL )
 		{
-			wifi_set_opmode( 2 );
+			wifi_set_opmode_current( 2 );
 			stt += ets_sprintf( stt, "Connection failed: %d\n", stat );
 			uart0_sendStr(stret);
 		}
@@ -128,14 +128,16 @@ restart:
 
 	ConfigI2C();
 
+	ControlInit(); //Reads out configuration.
 
 	int wifiMode = wifi_get_opmode();
 	printf( "Wifi Mode: %d (", wifiMode );
 	if( wifiMode == SOFTAP_MODE )
 	{
-		struct station_config c;
-		wifi_station_get_config( &c );
-		printf( "SoftAP)\n SSID: %s\n PASS: %s\n BSSID SET: %d\n", c.ssid, c.password, c.bssid_set );
+		struct softap_config c;
+		wifi_softap_get_config( &c );
+
+		printf( "SoftAP)\n SSID: %s\n PASS: %s\n Channel: %d\n Auth Mode: %s\n", c.ssid, c.password, c.channel, enctypes[c.authmode] );
 	}
 	else if( wifiMode == STATION_MODE )
 	{
@@ -177,13 +179,17 @@ restart:
     espconn_regist_time(pHTTPServer, 15, 0); //timeout
 
 
-
-
-
 //	ets_wdt_disable();
 
+	int i2ctries = 0;
+printf( "Starting I2C\n" );
 retryi2c:
 	ConfigI2C();
+
+	if( i2ctries++ > 100 )
+	{
+		goto skip_i2c;
+	}
 
 	if( SetupAVRTool() )
 	{
@@ -202,6 +208,8 @@ retryi2c:
 		uart0_sendStr("Retry LSM\r\n");
 		goto retryi2c;
 	}
+
+skip_i2c:
 
 	//Add a process
 	system_os_task(procTask, procTaskPrio, procTaskQueue, procTaskQueueLen);

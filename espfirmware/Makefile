@@ -29,6 +29,7 @@ SRCS:=driver/uart.c \
 	user/http_custom.c \
 	user/avrtool.c
 
+IP?=192.168.4.1
 
 GCC_FOLDER:=~/esp8266/esp-open-sdk/xtensa-lx106-elf
 ESPTOOL_PY:=~/esp8266/esptool/esptool.py
@@ -89,7 +90,7 @@ burn : $(FW_FILE_1) $(FW_FILE_2)
 
 
 netburn : image.elf $(FW_FILE_1) $(FW_FILE_2)
-	web/execute_reflash 192.168.4.1 0x00000.bin 0x40000.bin
+	web/execute_reflash $(IP) 0x00000.bin 0x40000.bin
 
 terminal :
 	@stty -F $(PORT) 115200 -echo raw && cat $(PORT)

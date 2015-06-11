@@ -10,9 +10,9 @@
 struct SaveSector
 {
 	int32_t gyrocenter[3];
-	int32_t acccenter[3];
-	int32_t	accelmin[3];
-	int32_t	accelmax[3];
+	int32_t acccenter[3]; //Third is unused.
+	int32_t	accelmin[3]; //First 2 are unused.
+	int32_t	accelmax[3]; //First 2 are unused.
 	int32_t	magmin[3];
 	int32_t	magmax[3];
 };
@@ -35,17 +35,9 @@ extern struct espconn *pespconn;
 
 #define BARIIRDEP 5
 
-#define MAGIIRDEP 7
-#define ACCIIRDEP    7
-#define GYRIIRDEP    9
-
-#define GYRIIRDIV (1./512.)
-#define ACCIIRDIV (1./128.)
-#define ACCUNITS .001
-#define ACCIIRMUX (128.)
-#define MAGIIRDIV (1./128.)
-
-#define GYROUNITS .001
+#define GYRIIRDEP    6
+#define ACCIIRDEP    6
+#define MAGIIRDEP    6
 
 #endif
 

@@ -250,14 +250,13 @@ int main(int argc, char**argv)
 		int n=recvfrom(sockfd,recvline,10000,0,NULL,NULL);
 
 		printf( "Response: %s\n",recvline ); 
-		return -1;
+		return 0;
 	}
 	else
 	{
 		printf( "Timeout. Good? Maybe?\n" );
 		return 0;
 	}
-
 
 	return 0;
 }

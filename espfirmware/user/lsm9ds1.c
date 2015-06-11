@@ -94,7 +94,17 @@ int ReadAGM( int16_t * LINROTMAG )
 	retry:
 	SendStart();
 	r = SendByte( AG_ADDY );
-	if( r ) { SendStop(); timeout++; if( timeout < 10 ) goto retry; }  //Not sure why, but this seems to happen frequently.
+
+	//Not sure why, but this seems to happen frequently.
+	if( r ) {
+		SendStop();
+		timeout++;
+		if( timeout < 10 )
+			goto retry;
+		else
+			return -81;
+	}
+
 	SendByte( 0x17 );
 	SendStop();
 
@@ -103,7 +113,8 @@ int ReadAGM( int16_t * LINROTMAG )
 	status = GetByte( 1 );
 	SendStop();
 
-	if( status <= 0 ) { timeout++; if( timeout < 10 ) goto retry; }
+	//???? What is going on here?
+	if( status <= 0 ) { timeout++; if( timeout < 10 ) goto retry; else return -15; }
 
 	SendStart();
 	r = SendByte( AG_ADDY );
