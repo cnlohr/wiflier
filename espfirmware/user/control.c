@@ -62,6 +62,17 @@ int bus_online = 1;
 struct SaveSector settings;
 
 
+
+
+
+
+
+
+
+
+///////////////////////////////////////////////////////////////////////////////////////
+/////////////////// This awful code is my stand-in for a control loop.
+/////////////////// I REALLY HOPE it gets 100% trashed!
 struct Pid
 {
 	int32_t error;
@@ -227,6 +238,22 @@ const uint8_t ThrustCurve[] = {
 		else targetAxes[i]++;
 	}
 }
+/////////////////// This awful code is my stand-in for a control loop.
+/////////////////// I REALLY HOPE it gets 100% trashed!
+///////////////////////////////////////////////////////////////////////////////////////
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 void ICACHE_FLASH_ATTR ResetIIR()
 {
@@ -332,6 +359,9 @@ void ICACHE_FLASH_ATTR controltimer()
 
 	sensorstatus = ReadAGM( sensordata );
 
+	//This is ridiculous.  We need a better way to make sure our data isn't corrupt.  Also... why is our data corrupt in the first place?
+	//It might be EMI... I did add those two pullup resistors, too.
+	//Maybe something's going on with one of the pins on the chip?
 	if( sensorstatus < -10 || sensordata[3] < -32000 || sensordata[3] > 32000|| sensordata[4] < -32000 || sensordata[4] > 32000 )  //XXX HACKY!!!
 	{
 		agmfailures++;
@@ -493,7 +523,7 @@ void ICACHE_FLASH_ATTR issue_command(void *arg, char *pusrdata, unsigned short l
 	switch( pusrdata[0] )
 	{
 	case 'd': case 'D':
-		((void(*)())0x40000080)();
+		((void(*)())0x40000080)(); //Reboot.
 		break;
 	case 'b': case 'B':
 		if( pusrdata[1] == '0' )
@@ -508,7 +538,7 @@ void ICACHE_FLASH_ATTR issue_command(void *arg, char *pusrdata, unsigned short l
 		}
 		else
 		{
-			//No.
+			espconn_sent( pespconn, "!B\r\n", 4 );
 		}
 		break;
 
@@ -525,7 +555,7 @@ void ICACHE_FLASH_ATTR issue_command(void *arg, char *pusrdata, unsigned short l
 		}
 		else
 		{
-			//No.
+			espconn_sent( pespconn, "!T\r\n", 4 );
 		}
 		break;
 	case 'u': case 'U': //Stream Data, RAW (U0, U1)
@@ -590,24 +620,6 @@ void ICACHE_FLASH_ATTR issue_command(void *arg, char *pusrdata, unsigned short l
 	{
 		char buffer[64];
 		int i;
-/*		const char * n1 = (char*)&pusrdata[1];
-		if( !*n1 ) goto skip;
-		const char * n2 = (const char *) ets_strstr( n1+1, ":" );
-		if( !n2 ) goto skip;
-		const char * n3 = (const char *) ets_strstr( n2+1, ":" );
-		if( !n3 ) goto skip;
-		const char * n4 = (const char *) ets_strstr( n3+1, ":" );
-		if( !n4 ) goto skip;
-
-		if( !n1 || !n2 || !n3 || !n4 )
-		{
-			espconn_sent( pespconn, "!J\r\n", 4 );
-		}
-
-		targetAxes[0] = my_atoi(n1);
-		targetAxes[1] = my_atoi(n2+1);
-		targetAxes[2] = my_atoi(n3+1);
-		targetAxes[3] = my_atoi(n4+1);*/
 
 		int32_t tmpaxes[4];
 
