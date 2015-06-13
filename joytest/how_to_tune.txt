@@ -1,0 +1,22 @@
+To tune L/R: Set tuning to:
+N0:0:0:12600:####:0:0:12600:0:0:0:12600
+
+#### = High P value (400 worked for me)
+
+Try running the craft.
+
+Get an oscillation.
+
+Open oscillation in OpenOffice.
+
+Find period of oscillation (from 0 to high, to 0 to low to 0)
+
+I.e. rows 2659 to 2724... 65
+
+Zeigler Nichols says: Ku = 120, Tu = 65
+ Kp = .6Ku     Kp = 72
+ Ki = 2Kp/Tu   Ki = 3
+ Kd = Kp*Tu/8  Kd = 585
+
+N0:0:0:12600:72:3:585:12600:0:0:0:12600
+
