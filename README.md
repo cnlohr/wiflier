@@ -2,6 +2,10 @@
 
 WARNING: This project is still in its early stages!  It doesn't fly yet!
 
+WARNING: Everything surrounding a control loop in control.c for flight IS SUPER JANKEY AND TOTALLY NOT HOW IT SHOULD BE!
+
+WARNING: I had to modify my current board to add pullups on the I2C and short out the AVR's reset to VBat, otherwise it seemed to reboot randomly during flight.  I am also getting trashed IMU data periodically.
+
 Do you think quadcopters are neat?  Eh, not really for me... BUT I THINK ESP8266's ARE AWESOME!  So, I slapped an LSM9DS1 IMU, a BMP085 barometer and an AVR co-processor with 4 PWM output drivers to a PCB small enough to fit in a hubsan X4 quadcopter.
 
 
