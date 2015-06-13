@@ -55,6 +55,7 @@ uint32_t calmag[3];
 
 int16_t sensordata[10];
 int8_t  sensorstatus;
+int8_t sensor_data_valid;
 
 int bus_online = 1;
 
@@ -120,24 +121,30 @@ void HandleClosedLoopMotors()
 	}
 
 	int32_t in_spin = ((int32_t)(calgyro[2]));  //POSITIVE = moving counter-clockwise.
-	int32_t in_leftright = ((int32_t)(calacc[1])); //LEFT = POSITIVE, RIGHT = NEGATIVE
-	int32_t in_fwdbak = ((int32_t)(calacc[0]));    //FWD = NEGATIVE, REVERSE = POSITIVE
+//	int32_t in_leftright = ((int32_t)(calacc[1])); //LEFT = POSITIVE, RIGHT = NEGATIVE
+//	int32_t in_fwdbak = ((int32_t)(calacc[0]));    //FWD = NEGATIVE, REVERSE = POSITIVE
+	int32_t in_leftright = -((int32_t)(calgyro[0])); //LEFT = POSITIVE, RIGHT = NEGATIVE
+	int32_t in_fwdbak = ((int32_t)(calgyro[1]));    //FWD = NEGATIVE, REVERSE = POSITIVE
 
-#define IIRA 1
+#define IIRA 0
 #define MOTIONMUX 100
 
-	iir_spin = (iir_spin + in_spin) - (iir_spin>>IIRA);
+/*	iir_spin = (iir_spin + in_spin) - (iir_spin>>IIRA);
 	iir_leftright = (iir_leftright + in_leftright) - (iir_leftright>>IIRA);
 	iir_fwdbak = (iir_fwdbak + in_fwdbak) - (iir_fwdbak>>IIRA);
 
 	int32_t spin = iir_spin >> IIRA;
 	int32_t leftright = iir_leftright >> IIRA;
 	int32_t fwdbak = iir_fwdbak >> IIRA;
+*/
 
+	int32_t spin = in_spin;
+	int32_t leftright = in_leftright;
+	int32_t fwdbak = in_fwdbak;
 
-	PIDs[0].error = spin;
-	PIDs[1].error = leftright;
-	PIDs[2].error = fwdbak;
+	PIDs[0].error = spin + targetAxes[2]>>8;
+	PIDs[1].error = leftright + targetAxes[0]>>8;
+	PIDs[2].error = fwdbak - targetAxes[1]>>8;
 
 	RunPid( &PIDs[0] );
 	RunPid( &PIDs[1] );
@@ -152,9 +159,9 @@ void HandleClosedLoopMotors()
 	//Joystick foward = negative
 	//Joystick right = positive.
 
-	leftright += targetAxes[0]; //Positve = move right
-	fwdbak -= targetAxes[1];   //Positive = 
-	spin -= targetAxes[2];
+//	leftright += targetAxes[0]; //Positve = move right
+//	fwdbak -= targetAxes[1];   //Positive = 
+//	spin -= targetAxes[2];
 
 /*	spin = (spin * 310)>>8;
 	leftright = (leftright * 350)>>8;
@@ -325,7 +332,7 @@ void ICACHE_FLASH_ATTR controltimer()
 
 	sensorstatus = ReadAGM( sensordata );
 
-	if( sensorstatus < -10 )
+	if( sensorstatus < -10 || sensordata[3] < -32000 || sensordata[3] > 32000|| sensordata[4] < -32000 || sensordata[4] > 32000 )  //XXX HACKY!!!
 	{
 		agmfailures++;
 		if( agmfailures > 10 )
@@ -333,9 +340,12 @@ void ICACHE_FLASH_ATTR controltimer()
 			agmfailures = 0;
 			SetupLSM();
 		}
+
+		sensor_data_valid = 0;
 	}
 	else
 	{
+		sensor_data_valid = 1;
 		agmfailures = 0;
 	}
 
@@ -395,7 +405,7 @@ void ICACHE_FLASH_ATTR controltimer()
 //	gMotors[0] = gMotors[1] = gMotors[2] = gMotors[3] = 0x80;
 
 	//Closed loop control.
-	if( motors_automatic )
+	if( motors_automatic && sensor_data_valid )
 	{
 		HandleClosedLoopMotors();
 	}
@@ -540,7 +550,7 @@ void ICACHE_FLASH_ATTR issue_command(void *arg, char *pusrdata, unsigned short l
 		break;
 	case 'n': case 'N': 
 	{
-		switch( pusrdata[2] )
+		switch( pusrdata[1] )
 		{
 		case 'p': case 'P': //Set PIDs, needs 12 parameters pidSpin.kp,ki,kd...pidLeftRight...pidFwdBack
 		{
@@ -669,6 +679,12 @@ skip:
 			break;
 		}
 		case 'A': case 'a':
+			if( motors_automatic == 0 )
+			{
+				PIDs[0].i = 0;
+				PIDs[1].i = 0;
+				PIDs[2].i = 0;
+			}
 			motors_automatic = 1;
 			timeout_for_ma = 0;
 			espconn_sent( pespconn, "MA\r\n", 4 );

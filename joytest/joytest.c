@@ -116,7 +116,7 @@ int main(int argc, char**argv)
 
 		if( ((gotjoy & 0x0f) == 0x0f ) )
 		{
-			int n = sprintf( sendline, "J%d:%d:%d:%d", joyd[0]/3, joyd[1]/3, joyd[2]/3, -joyd[3]/3-100 );
+			int n = sprintf( sendline, "J%d:%d:%d:%d", joyd[0]/8, joyd[1]/8, /*joyd[2]/5*/0, -joyd[3]/3-100 );
 			puts( sendline );
 			int r = sendto(sockfd,sendline, n,0, (struct sockaddr *)&servaddr,sizeof(servaddr));
 			if( r != n )
