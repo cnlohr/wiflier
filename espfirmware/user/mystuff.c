@@ -8,15 +8,15 @@ char * generic_ptr;
 
 int32 ICACHE_FLASH_ATTR my_atoi( const char * in )
 {
-	int negative = 0; //1 if negative.
+	int positive = 1; //1 if negative.
 	int hit = 0;
 	int val = 0;
 	while( *in && hit < 11 	)
 	{
 		if( *in == '-' )
 		{
-			if( negative ) return val;
-			negative = 1;
+			if( positive == -1 ) return val*positive;
+			positive = -1;
 		} else if( *in >= '0' && *in <= '9' )
 		{
 			val *= 10;
@@ -28,11 +28,11 @@ int32 ICACHE_FLASH_ATTR my_atoi( const char * in )
 		} else
 		{
 			//bad.
-			return val;
+			return val*positive;
 		}
 		in++;
 	}
-	return val;
+	return val*positive;
 }
 
 void Uint32To10Str( char * out, uint32 dat )
@@ -95,5 +95,26 @@ int8_t TCPDoneSend( struct espconn * conn )
 {
 	return conn->state == ESPCONN_CONNECT;
 }
+
+const char * my_strchr( const char * st, char c )
+{
+	while( *st && *st != c ) st++;
+	if( !*st ) return 0;
+	return st;
+}
+
+int ColonsToInts( const char * str, int32_t * vals, int max_quantity )
+{
+	int i;
+	for( i = 0; i < max_quantity; i++ )
+	{
+		const char * colon = my_strchr( str, ':' );
+		vals[i] = my_atoi( str );
+		if( !colon ) break;
+		str = colon+1;
+	}
+	return i+1;
+}
+
 
 

@@ -36,12 +36,12 @@ int32_t	 accNow[3];
 int32_t  magNow[3];
 int32_t  barNow;
 int32_t  tempNow;  //tenths of degrees 
-int16_t  targetAxes[4]; //Expected -1000..1000 (L/R, FWD/BKD, Orient, elevator)
+int16_t  targetAxes[4]; //Expected -10,000..10,000 (L/R, FWD/BKD, Orient, elevator)
 
 int		  voltNow;
 uint8_t  gMotors[4];
 uint8_t  motors_automatic = 0; //whether in flight? Maybe?
-
+uint8_t timeout_for_ma = 0;
 //Used only for centering.
 int32_t  gyrIIR[3];
 int32_t  accIIR[3];
@@ -59,6 +59,167 @@ int8_t  sensorstatus;
 int bus_online = 1;
 
 struct SaveSector settings;
+
+
+struct Pid
+{
+	int32_t error;
+	int32_t last;
+	int32_t i;
+	int32_t d;
+
+	int32_t kp; //unity = 256
+	int32_t ki; //unity = 256
+	int32_t kd; //unity = 256
+	int32_t outmax; //Should be 12800
+
+	int32_t output;
+} PIDs[3];
+
+void RunPid( struct Pid * p )
+{
+	p->d = p->error - p->last;
+	p->i += p->error;
+
+	int32_t ci = ((p->i * p->ki)>>8);
+
+	if( ci > p->outmax )
+	{
+		p->i = (p->outmax / p->ki)<<8;
+	}
+	else if( ci < -p->outmax )
+	{
+		p->i = -((p->outmax / p->ki)<<8);
+
+	}
+
+	p->output = ((p->error * p->kp) + (p->i * p->ki) + (p->d * p->kd))>>8;
+
+	if( p->output > p->outmax )
+	{
+		p->output = p->outmax;
+	}
+	else if( p->output < -p->outmax )
+	{
+		p->output = -p->outmax;
+	}
+}
+
+
+void HandleClosedLoopMotors()
+{
+	int i;
+	char buffer[128];
+	static int32_t iir_spin;
+	static int32_t iir_leftright;
+	static int32_t iir_fwdbak;
+
+	if( timeout_for_ma++ > 30 )
+	{
+		motors_automatic = 0;
+	}
+
+	int32_t in_spin = ((int32_t)(calgyro[2]));  //POSITIVE = moving counter-clockwise.
+	int32_t in_leftright = ((int32_t)(calacc[1])); //LEFT = POSITIVE, RIGHT = NEGATIVE
+	int32_t in_fwdbak = ((int32_t)(calacc[0]));    //FWD = NEGATIVE, REVERSE = POSITIVE
+
+#define IIRA 1
+#define MOTIONMUX 100
+
+	iir_spin = (iir_spin + in_spin) - (iir_spin>>IIRA);
+	iir_leftright = (iir_leftright + in_leftright) - (iir_leftright>>IIRA);
+	iir_fwdbak = (iir_fwdbak + in_fwdbak) - (iir_fwdbak>>IIRA);
+
+	int32_t spin = iir_spin >> IIRA;
+	int32_t leftright = iir_leftright >> IIRA;
+	int32_t fwdbak = iir_fwdbak >> IIRA;
+
+
+	PIDs[0].error = spin;
+	PIDs[1].error = leftright;
+	PIDs[2].error = fwdbak;
+
+	RunPid( &PIDs[0] );
+	RunPid( &PIDs[1] );
+	RunPid( &PIDs[2] );
+
+
+
+	spin = PIDs[0].output;
+	leftright = PIDs[1].output;
+	fwdbak = PIDs[2].output;
+
+	//Joystick foward = negative
+	//Joystick right = positive.
+
+	leftright += targetAxes[0]; //Positve = move right
+	fwdbak -= targetAxes[1];   //Positive = 
+	spin -= targetAxes[2];
+
+/*	spin = (spin * 310)>>8;
+	leftright = (leftright * 350)>>8;
+	fwdbak  = (fwdbak*350)>>8;*/
+
+	//M0: Front, right, clockwise
+	//M1: Rear, right, counter-clockwise
+	//M2: Rear, left, clockwise
+	//M3: Front, left, counter-clockwise
+
+	int m1 = -leftright - fwdbak - spin;
+	int m2 = -leftright + fwdbak + spin;
+	int m3 =  leftright + fwdbak - spin;
+	int m4 =  leftright - fwdbak + spin;
+
+	ets_sprintf( buffer, "MD\t%d\t%d\t%d\t%d\n", m1, m2, m3, m4 );
+	if( pespconn )
+		espconn_sent( pespconn, buffer, ets_strlen( buffer ) );
+
+	m1 = (m1 + (targetAxes[3]))>>6;
+	m2 = (m2 + (targetAxes[3]))>>6;
+	m3 = (m3 + (targetAxes[3]))>>6;
+	m4 = (m4 + (targetAxes[3]))>>6;
+
+	if( m1 < 0 ) m1 = 0;
+	if( m2 < 0 ) m2 = 0;
+	if( m3 < 0 ) m3 = 0;
+	if( m4 < 0 ) m4 = 0;
+
+	if( m1 > 255 ) m1 = 255;
+	if( m2 > 255 ) m2 = 255;
+	if( m3 > 255 ) m3 = 255;
+	if( m4 > 255 ) m4 = 255;
+
+const uint8_t ThrustCurve[] = {
+          0,  28,  32,  36,  39,  42,  44,  47,  49,  51,  53,  55,  57,  59,  61,  63, 
+         64,  66,  67,  69,  71,  72,  74,  75,  77,  78,  79,  81,  82,  83,  85,  86, 
+         87,  89,  90,  91,  92,  93,  95,  96,  97,  98,  99, 100, 102, 103, 104, 105, 
+        106, 107, 108, 109, 110, 111, 112, 113, 114, 115, 116, 117, 118, 119, 120, 121, 
+        122, 123, 124, 125, 126, 127, 128, 129, 130, 131, 132, 132, 133, 134, 135, 136, 
+        137, 138, 139, 140, 140, 141, 142, 143, 144, 145, 146, 146, 147, 148, 149, 150, 
+        151, 151, 152, 153, 154, 155, 155, 156, 157, 158, 159, 159, 160, 161, 162, 162, 
+        163, 164, 165, 166, 166, 167, 168, 169, 169, 170, 171, 172, 172, 173, 174, 174, 
+        175, 176, 177, 177, 178, 179, 180, 180, 181, 182, 182, 183, 184, 185, 185, 186, 
+        187, 187, 188, 189, 189, 190, 191, 191, 192, 193, 193, 194, 195, 195, 196, 197, 
+        198, 198, 199, 200, 200, 201, 201, 202, 203, 203, 204, 205, 205, 206, 207, 207, 
+        208, 209, 209, 210, 211, 211, 212, 212, 213, 214, 214, 215, 216, 216, 217, 217, 
+        218, 219, 219, 220, 221, 221, 222, 222, 223, 224, 224, 225, 225, 226, 227, 227, 
+        228, 228, 229, 230, 230, 231, 231, 232, 233, 233, 234, 234, 235, 236, 236, 237, 
+        237, 238, 238, 239, 240, 240, 241, 241, 242, 243, 243, 244, 244, 245, 245, 246, 
+        247, 247, 248, 248, 249, 249, 250, 250, 251, 252, 252, 253, 253, 254, 254, 255, };
+
+
+	gMotors[0] = ThrustCurve[m1];
+	gMotors[1] = ThrustCurve[m2];
+	gMotors[2] = ThrustCurve[m3];
+	gMotors[3] = ThrustCurve[m4];
+
+
+	for( i = 0; i < 4; i++ )
+	{
+		if( targetAxes[i] > 0 ) targetAxes[i]--;
+		else targetAxes[i]++;
+	}
+}
 
 void ICACHE_FLASH_ATTR ResetIIR()
 {
@@ -236,53 +397,7 @@ void ICACHE_FLASH_ATTR controltimer()
 	//Closed loop control.
 	if( motors_automatic )
 	{
-		int32_t spin = ((int32_t)(calgyro[2]));  //POSITIVE = moving counter-clockwise.
-		int32_t leftright = ((int32_t)(calacc[0])); //LEFT = POSITIVE, RIGHT = NEGATIVE
-		int32_t fwdbak = ((int32_t)(calacc[1]));    //FWD = NEGATIVE, REVERSE = POSITIVE
-
-		//Joystick foward = negative
-		//Joystick right = positive.
-
-		leftright += targetAxes[0]; //Positve = move right
-		fwdbak -= targetAxes[1];   //Positive = 
-		spin -= targetAxes[2];
-
-		//M0: Front, right, clockwise
-		//M1: Rear, right, counter-clockwise
-		//M2: Rear, left, clockwise
-		//M3: Front, left, counter-clockwise
-
-		int m1 = -leftright - fwdbak - spin;
-		int m2 =  leftright - fwdbak + spin;
-		int m3 =  leftright + fwdbak - spin;
-		int m4 = -leftright + fwdbak + spin;
-
-		ets_sprintf( buffer, "MD\t%d\t%d\t%d\t%d\n", m1, m2, m3, m4 );
-		if( pespconn )
-			espconn_sent( pespconn, buffer, ets_strlen( buffer ) );
-
-		m1 = (m1 + (targetAxes[3]))>>6;
-		m2 = (m2 + (targetAxes[3]))>>6;
-		m3 = (m3 + (targetAxes[3]))>>6;
-		m4 = (m4 + (targetAxes[3]))>>6;
-
-		if( m1 < 0 ) m1 = 0;
-		if( m2 < 0 ) m2 = 0;
-		if( m3 < 0 ) m3 = 0;
-		if( m4 < 0 ) m4 = 0;
-
-		if( m1 > 200 ) m1 = 200;
-		if( m2 > 200 ) m2 = 200;
-		if( m3 > 200 ) m3 = 200;
-		if( m4 > 200 ) m4 = 200;
-
-		gMotors[0] = m1;
-		gMotors[1] = m2;
-		gMotors[2] = m3;
-		gMotors[3] = m4;
-
-
-
+		HandleClosedLoopMotors();
 	}
 	else
 	{
@@ -423,12 +538,56 @@ void ICACHE_FLASH_ATTR issue_command(void *arg, char *pusrdata, unsigned short l
 		DoZero();
 		espconn_sent( pespconn, "Z\r\n", 4 );
 		break;
+	case 'n': case 'N': 
+	{
+		switch( pusrdata[2] )
+		{
+		case 'p': case 'P': //Set PIDs, needs 12 parameters pidSpin.kp,ki,kd...pidLeftRight...pidFwdBack
+		{
+			int32_t pids[12];
+			int r = ColonsToInts( (const char*)&pusrdata[2], pids, 12 );
+			int i;
+
+			if( r == 12 )
+			{
+				char buffer[256];
+				char * bt = buffer;
+
+				bt += ets_sprintf( bt, "N" );
+				for( i = 0; i < 3; i++ )
+				{
+					PIDs[i].kp = pids[i*4+0];
+					PIDs[i].ki = pids[i*4+1];
+					PIDs[i].kd = pids[i*4+2];
+					PIDs[i].outmax = pids[i*4+3];
+					bt += ets_sprintf( bt, "%d:%d:%d:%d%c", PIDs[i].kp, PIDs[i].ki, PIDs[i].kd, PIDs[i].outmax, (i==3)?'\r':':' );
+				}
+				*(bt++) = '\n';
+				espconn_sent( pespconn, buffer, bt-buffer );
+			}
+			else
+			{
+				espconn_sent( pespconn, "!N\r\n", 4 );
+			}
+
+			//Tune all PID values.
+			break;
+		}
+		}
+		break;
+	}
 	case 'j': case 'J': //Joystick input (Bank Right, Bank Forward, Turn, Elevator)
 	{
-		const char * n1 = (char*)&pusrdata[1];
-		const char * n2 = (const char *) ets_strstr( n1, ":" );
-		const char * n3 = (const char *) ets_strstr( n2, ":" );
-		const char * n4 = (const char *) ets_strstr( n3, ":" );
+		char buffer[64];
+		int i;
+/*		const char * n1 = (char*)&pusrdata[1];
+		if( !*n1 ) goto skip;
+		const char * n2 = (const char *) ets_strstr( n1+1, ":" );
+		if( !n2 ) goto skip;
+		const char * n3 = (const char *) ets_strstr( n2+1, ":" );
+		if( !n3 ) goto skip;
+		const char * n4 = (const char *) ets_strstr( n3+1, ":" );
+		if( !n4 ) goto skip;
 
 		if( !n1 || !n2 || !n3 || !n4 )
 		{
@@ -436,11 +595,26 @@ void ICACHE_FLASH_ATTR issue_command(void *arg, char *pusrdata, unsigned short l
 		}
 
 		targetAxes[0] = my_atoi(n1);
-		targetAxes[1] = my_atoi(n2);
-		targetAxes[2] = my_atoi(n3);
-		targetAxes[3] = my_atoi(n4);
+		targetAxes[1] = my_atoi(n2+1);
+		targetAxes[2] = my_atoi(n3+1);
+		targetAxes[3] = my_atoi(n4+1);*/
 
-		espconn_sent( pespconn, "J\r\n", 3 );
+		int32_t tmpaxes[4];
+
+		if( ColonsToInts( (const char*)&pusrdata[1], tmpaxes, 4 ) != 4 )
+		{
+			espconn_sent( pespconn, "!J\r\n", 4 );
+		}
+		else
+		{
+			for( i = 0; i < 4; i++ )
+				targetAxes[i] = tmpaxes[i];
+			int l = ets_sprintf( buffer, "J%d:%d:%d:%d\n", targetAxes[0], targetAxes[1], targetAxes[2], targetAxes[3] );
+			espconn_sent( pespconn, buffer, l );
+		}
+
+		break;
+skip:
 		break;
 	}
 	case 'r': case 'R': //Start/Stop Range Setting (R1, R0) When in range setting, rotate ESP slowly.
@@ -467,6 +641,10 @@ void ICACHE_FLASH_ATTR issue_command(void *arg, char *pusrdata, unsigned short l
 			buffend += ets_sprintf(buffend, "#AH\t%d\t%d\t%d\r\n",((int32_t)(settings.accelmax[0])), ((int32_t)(settings.accelmax[1])), ((int32_t)(settings.accelmax[2])) );
 			buffend += ets_sprintf(buffend, "#ML\t%d\t%d\t%d\r\n",((int32_t)(settings.magmin[0])), ((int32_t)(settings.magmin[1])), ((int32_t)(settings.magmin[2])) );
 			buffend += ets_sprintf(buffend, "#MH\t%d\t%d\t%d\r\n",((int32_t)(settings.magmax[0])), ((int32_t)(settings.magmax[1])), ((int32_t)(settings.magmax[2])) );
+
+			buffend += ets_sprintf(buffend, "#PS\t%d\t%d\t%d\t\r\n", PIDs[0].kp, PIDs[0].ki, PIDs[0].kd, PIDs[0].outmax );
+			buffend += ets_sprintf(buffend, "#PT\t%d\t%d\t%d\t\r\n", PIDs[1].kp, PIDs[1].ki, PIDs[1].kd, PIDs[1].outmax );
+			buffend += ets_sprintf(buffend, "#PU\t%d\t%d\t%d\t\r\n", PIDs[2].kp, PIDs[2].ki, PIDs[2].kd, PIDs[2].outmax );
 			espconn_sent( pespconn, buffer, ets_strlen( buffer ) );
 			break;
 		}
@@ -492,6 +670,7 @@ void ICACHE_FLASH_ATTR issue_command(void *arg, char *pusrdata, unsigned short l
 		}
 		case 'A': case 'a':
 			motors_automatic = 1;
+			timeout_for_ma = 0;
 			espconn_sent( pespconn, "MA\r\n", 4 );
 			break;
 		case 'M': case 'm':
@@ -749,10 +928,28 @@ void ICACHE_FLASH_ATTR ControlInit()
 	flashchip->chip_size = 0x01000000;
 	spi_flash_read( 0x3D000, (uint32*)&settings, sizeof( settings ) );
 	flashchip->chip_size = 0x00080000;
+
+	int i;
+	for( i = 0; i < 3; i++ )
+	{
+		PIDs[i].kp = settings.PIDVals[i*4+0];
+		PIDs[i].ki = settings.PIDVals[i*4+1];
+		PIDs[i].kd = settings.PIDVals[i*4+2];
+		PIDs[i].outmax = settings.PIDVals[i*4+3];
+	}
 }
 
 void ICACHE_FLASH_ATTR SaveSettings()
 {
+	int i;
+	for( i = 0; i < 3; i++ )
+	{
+		settings.PIDVals[i*4+0] = PIDs[i].kp;
+		settings.PIDVals[i*4+1] = PIDs[i].ki;
+		settings.PIDVals[i*4+2] = PIDs[i].kd;
+		settings.PIDVals[i*4+3] = PIDs[i].outmax;
+	}
+
 	flashchip->chip_size = 0x01000000;
 	spi_flash_erase_sector( 0x3D000/4096 );
 	spi_flash_write( 0x3D000, (uint32*)&settings, sizeof( settings ) );

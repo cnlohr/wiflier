@@ -30,4 +30,7 @@ void PushBlob( const uint8 * buffer, int len );
 #define START_PACK {generic_ptr=generic_buffer;}
 #define PACK_LENGTH (generic_ptr-&generic_buffer[0]}
 
+
+int ColonsToInts( const char * str, int32_t * vals, int max_quantity );
+
 #endif

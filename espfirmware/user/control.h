@@ -15,6 +15,8 @@ struct SaveSector
 	int32_t	accelmax[3]; //First 2 are unused.
 	int32_t	magmin[3];
 	int32_t	magmax[3];
+
+	int32_t PIDVals[12]; //P, I, D, MAX (For all 3 PIDs (SPIN, LEFTRIGHT, FWDBAK)
 };
 
 extern struct SaveSector settings;
