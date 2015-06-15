@@ -221,7 +221,7 @@ skip_i2c:
 	//Timer example
 	os_timer_disarm(&some_timer);
 	os_timer_setfn(&some_timer, (os_timer_func_t *)MyTimer, NULL);
-	os_timer_arm(&some_timer, 6, 1); //166.66 Hz update rate.
+	os_timer_arm(&some_timer, 10, 1); // was 6, 166.66 Hz update rate... let's try 100hz
 
 
 	system_os_post(procTaskPrio, 0, 0 );

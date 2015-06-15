@@ -93,19 +93,19 @@ void RunPid( struct Pid * p )
 	p->d = p->error - p->last;
 	p->i += p->error;
 
-	int32_t ci = ((p->i * p->ki)>>8);
+	int32_t ci = ((p->i * p->ki)>>(8+GYRIIRDEP));
 
 	if( ci > p->outmax )
 	{
-		p->i = (p->outmax / p->ki)<<8;
+		p->i = (p->outmax / p->ki)<<(8+GYRIIRDEP);
 	}
 	else if( ci < -p->outmax )
 	{
-		p->i = -((p->outmax / p->ki)<<8);
+		p->i = -((p->outmax / p->ki)<<(8+GYRIIRDEP));
 
 	}
 
-	p->output = ((p->error * p->kp) + (p->i * p->ki) + (p->d * p->kd))>>8;
+	p->output = ((p->error * p->kp) + (p->i * p->ki) + (p->d * p->kd))>>(8+GYRIIRDEP);
 
 	if( p->output > p->outmax )
 	{
@@ -137,6 +137,7 @@ void HandleClosedLoopMotors()
 	int32_t in_leftright = -((int32_t)(calgyro[0])); //LEFT = POSITIVE, RIGHT = NEGATIVE
 	int32_t in_fwdbak = ((int32_t)(calgyro[1]));    //FWD = NEGATIVE, REVERSE = POSITIVE
 
+
 #define IIRA 0
 #define MOTIONMUX 100
 
@@ -153,9 +154,9 @@ void HandleClosedLoopMotors()
 	int32_t leftright = in_leftright;
 	int32_t fwdbak = in_fwdbak;
 
-	PIDs[0].error = spin + targetAxes[2]>>8;
-	PIDs[1].error = leftright + targetAxes[0]>>8;
-	PIDs[2].error = fwdbak - targetAxes[1]>>8;
+	PIDs[0].error = spin + targetAxes[2]>>2;
+	PIDs[1].error = leftright + targetAxes[0]>>2;
+	PIDs[2].error = fwdbak - targetAxes[1]>>2;
 
 	RunPid( &PIDs[0] );
 	RunPid( &PIDs[1] );
@@ -399,7 +400,7 @@ void ICACHE_FLASH_ATTR controltimer()
 		gyrNow[i] = sensordata[i+3];
 		gyrIIR[i] = ( gyrIIR[i] - ( gyrIIR[i] >> GYRIIRDEP ) ) + gyrNow[i];
 
-		calgyro[i] = ( (int32_t)gyrNow[i] - ((int32_t)settings.gyrocenter[i]>>GYRIIRDEP) );
+		calgyro[i] = ( ((int32_t)gyrNow[i]<<GYRIIRDEP) - ((int32_t)settings.gyrocenter[i]) );
 	}
 
 	for( i = 2; i < 3; i++ )
@@ -417,7 +418,7 @@ void ICACHE_FLASH_ATTR controltimer()
 		accNow[i] = sensordata[i];
 		accIIR[i] = ( accIIR[i] - ( accIIR[i] >> ACCIIRDEP ) ) + accNow[i];
 
-		calacc[i] = (((int32_t)accNow[i]) - ((int32_t)settings.acccenter[i]>>ACCIIRDEP));
+		calacc[i] = (((int32_t)accNow[i]<<ACCIIRDEP) - ((int32_t)settings.acccenter[i]>>ACCIIRDEP));
 	}
 
 
@@ -702,9 +703,21 @@ skip:
 			espconn_sent( pespconn, "MA\r\n", 4 );
 			break;
 		case 'M': case 'm':
+		{
+			int i;
+			char buffer[256];
+			char * buffend = &buffer[0];
+			int32_t ms[4];
+			int r = ColonsToInts( (const char*)&pusrdata[2], ms, 4 );
+			for( i = 0; i < r; i++ )
+			{
+				gMotors[i] = ms[i];
+			}
+
 			espconn_sent( pespconn, "MM\r\n", 4 );
 			motors_automatic = 0;
 			break;
+		}
 		case '0':
 		case '1':
 		case '2':

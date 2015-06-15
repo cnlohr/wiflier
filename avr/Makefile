@@ -7,7 +7,7 @@ PROGPART=t441
 AVRP=~/cpptest/avr-toolchain/avr-toolchain/bin/avr-
 
 #I have not measured the frequency.
-CFLAGS=-g -Wall -Os -mmcu=$(PART) -DF_CPU=15000000UL
+CFLAGS=-g -Wall -Os -mmcu=$(PART) -DF_CPU=8000000UL
 ASFLAGS:=$(CFLAGS)
 CC=avr-gcc
 

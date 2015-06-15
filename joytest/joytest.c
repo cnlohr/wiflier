@@ -17,6 +17,8 @@ int joyd[4];
 og_thread_t joy_t;
 og_thread_t recv_t;
 
+int rtrigger_down = 0;
+
 struct m_js_event {
 	uint32_t time;     /* event timestamp in milliseconds */
 	int16_t value;    /* value */
@@ -38,6 +40,10 @@ void * joy( void * v )
 			joyd[e.number] = e.value;
 			//printf( "%d / %d %d %d\n", e.time, e.value, e.type, e.number );
 		}
+		else if( e.number == 13 )
+		{
+			rtrigger_down = e.value > 10000;
+		}
 		gotjoy = 0xffffff;
 
 	} while( r == sizeof(e) );
@@ -58,6 +64,7 @@ void * recvthd( void * v )
 		{
 			fputs( recvline, thislog );
 		}
+		recvline[10] = 0;
 		fputs(recvline,stdout);
 	}
 }
@@ -98,12 +105,28 @@ int main(int argc, char**argv)
 
 	while(1)
 	{
-		int r = sendto(sockfd,"MA\n",3,0, (struct sockaddr *)&servaddr,sizeof(servaddr));
-		if( r != 3 )
+		int r;
+		if( rtrigger_down )
 		{
-			fprintf( stderr, "Error: could not send. %d\n", r  );
-			exit( -4 );
+			r = sendto(sockfd,"MA\n",3,0, (struct sockaddr *)&servaddr,sizeof(servaddr));
+			if( r != 3 )
+			{
+				fprintf( stderr, "Error: could not send. %d\n", r  );
+				exit( -4 );
+			}
 		}
+		else
+		{
+			const char * tosend = "MM0:0:0:0\n";
+			r = sendto(sockfd, tosend,strlen(tosend),0, (struct sockaddr *)&servaddr,sizeof(servaddr));
+			if( r != strlen(tosend) )
+			{
+				fprintf( stderr, "Error: could not send. %d\n", r  );
+				exit( -4 );
+			}
+		}
+		usleep(2000);
+
 
 		r = sendto(sockfd,"T1\n",3,0, (struct sockaddr *)&servaddr,sizeof(servaddr));
 		if( r != 3 )
@@ -112,12 +135,12 @@ int main(int argc, char**argv)
 			exit( -4 );
 		}
 
-		usleep(10000);
+		usleep(2000);
 
 		if( ((gotjoy & 0x0f) == 0x0f ) )
 		{
 			int n = sprintf( sendline, "J%d:%d:%d:%d", joyd[0]/8, joyd[1]/8, /*joyd[2]/5*/0, -joyd[3]/3-100 );
-			puts( sendline );
+			//puts( sendline );
 			int r = sendto(sockfd,sendline, n,0, (struct sockaddr *)&servaddr,sizeof(servaddr));
 			if( r != n )
 			{
@@ -125,6 +148,9 @@ int main(int argc, char**argv)
 				exit( -4 );
 			}
 		}
+
+		usleep(2000);
+
 
 		FILE * tuning = fopen( "tuning.txt", "rb" );
 		int i = 0;
@@ -147,7 +173,7 @@ int main(int argc, char**argv)
 		}
 
 
-		usleep(10000);
+		usleep(2000);
 
 	}
 /*	while (fgets(sendline, 10000,stdin) != NULL)
