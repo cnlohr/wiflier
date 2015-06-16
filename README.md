@@ -4,7 +4,7 @@ WARNING: This project is still in its early stages!  It doesn't fly yet!
 
 WARNING: Everything surrounding a control loop in control.c for flight IS SUPER JANKEY AND TOTALLY NOT HOW IT SHOULD BE!
 
-WARNING: I had to modify my current board to add pullups on the I2C and short out the AVR's reset to VBat, otherwise it seemed to reboot randomly during flight.  I am also getting trashed IMU data periodically.
+WARNING: When I operated the PWM at 3kHz, I had to modify my current board to add pullups on the I2C and short out the AVR's reset to VBat, otherwise it seemed to reboot randomly during flight.
 
 Do you think quadcopters are neat?  Eh, not really for me... BUT I THINK ESP8266's ARE AWESOME!  So, I slapped an LSM9DS1 IMU, a BMP085 barometer and an AVR co-processor with 4 PWM output drivers to a PCB small enough to fit in a hubsan X4 quadcopter.
 
@@ -12,6 +12,10 @@ Do you think quadcopters are neat?  Eh, not really for me... BUT I THINK ESP8266
 Picture of the wiflier brain
 
 <img src="https://raw.githubusercontent.com/cnlohr/wiflier/master/espfirmware/web/page/dsc.jpg" alt="Picture of Device" style="width: 500px;"/>
+
+Youtube video of the first crack at this:
+
+[!(http://img.youtube.com/vi/3n76iMTHXuE/0.jpg)](http://www.youtube.com/watch?v=3n76iMTHXuE) 
 
 ## The Hardware
 
@@ -270,7 +274,7 @@ Selecting this function will move the move the motors into automatic mode, allow
 
 #### MM: Motors in manual mode
 
-Disable automatic control of motors, they will now respond to the M(number) commands.
+Disable automatic control of motors, they will now respond to the M(number) commands.  Optionally, can take up to 4 arguments for the new motor set values.
 
 #### M0, M1, M2, M3: Set motor speed.
 
