@@ -341,8 +341,6 @@ static void ICACHE_FLASH_ATTR scandone(void *arg, STATUS status)
 		scanplace++;
 		if( scanplace == MAX_STATIONS ) break;
 	}
-	printf( "OK\n" );
-
 }
 
 
@@ -912,7 +910,9 @@ skip:
 				char buffer[1024];
 				char * buffend = &buffer[0];
 				int i, r;
-				printf( "A\n" );
+
+				scanplace = 0;
+
 				if( wifi_get_opmode() == SOFTAP_MODE )
 				{
 					wifi_set_opmode_current( STATION_MODE );
@@ -923,7 +923,6 @@ skip:
 				{
 					r = wifi_station_scan(0, scandone );
 				}
-				printf( "B\n" );
 
 				buffend += ets_sprintf( buffend, "WS%d\n", r );
 				uart0_sendStr(buffer);
