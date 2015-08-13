@@ -7,19 +7,19 @@ int SetupLSM()
 	int r;
 	SendStart();
 	r = SendByte( 0 );
-	if( !r ) { SendStop(); uart0_sendStr("I2C Fault\r\n"); return -2; }
+	if( !r ) { SendStop(); uart0_sendStr("I2C Fault"); return -2; }
 	SendStop();
 
 	SendStart();
 	r = SendByte( AG_ADDY );
-	if( r ) { SendStop(); uart0_sendStr("AG Fault\r\n"); return -4; }
+	if( r ) { SendStop(); uart0_sendStr("AG Fault"); return -4; }
 	SendByte( 0x22 );
 	SendByte( 0x81 ); //Reboot
 	SendStop();
 
 	SendStart();
 	r = SendByte( MA_ADDY );
-	if( r ) { SendStop(); uart0_sendStr("MA Fault\r\n"); return -4; }
+	if( r ) { SendStop(); uart0_sendStr("MA Fault"); return -4; }
 	SendByte( 0x21 );
 	SendByte( 0xC0 ); //Reboot
 	SendStop();
@@ -29,21 +29,21 @@ int SetupLSM()
 
 	SendStart();
 	r = SendByte( AG_ADDY );
-	if( r ) { SendStop(); uart0_sendStr("AG Fault\r\n"); return -4; }
+	if( r ) { SendStop(); uart0_sendStr("AG Fault"); return -4; }
 	SendByte( 0x2E );
 	SendByte( 0b00000000 ); //Bypass FIFO. //Was: Continuous FIFO mode, FIFO 3 deep.
 	SendStop();
 
 	SendStart();
 	r = SendByte( AG_ADDY );
-	if( r ) { SendStop(); uart0_sendStr("AG Fault\r\n"); return -4; }
+	if( r ) { SendStop(); uart0_sendStr("AG Fault"); return -4; }
 	SendByte( 0x22 );
 	SendByte( 0b00000110 ); //Auto increment! (Address in lower, too!)
 	SendStop();
 
 	SendStart();
 	r = SendByte( AG_ADDY );
-	if( r ) { SendStop(); uart0_sendStr("AG Fault\r\n"); return -4; }
+	if( r ) { SendStop(); uart0_sendStr("AG Fault"); return -4; }
 	SendByte( 0x10 );
 	SendByte( 0b10001011 ); //Gyro ODR=238Hz, Cutoff=78Hz, 500DPS
 	SendByte( 0b00000000 ); //...
@@ -52,7 +52,7 @@ int SetupLSM()
 
 	SendStart();
 	r = SendByte( AG_ADDY );
-	if( r ) { SendStop(); uart0_sendStr("AG Fault\r\n"); return -4; }
+	if( r ) { SendStop(); uart0_sendStr("AG Fault"); return -4; }
 	SendByte( 0x1E );
 	SendByte( 0b00111000 ); //0x1E: Enable Gyro
 	SendByte( 0b00111000 ); //0x1F: Turn on Accelerometer
@@ -64,7 +64,7 @@ int SetupLSM()
 
 	SendStart();
 	r = SendByte( MA_ADDY );
-	if( r ) { SendStop(); uart0_sendStr("MA Fault\r\n"); return -4; }
+	if( r ) { SendStop(); uart0_sendStr("MA Fault"); return -4; }
 	SendByte( 0x20 );
 	SendByte( 0b11111110 ); //Temp Comp on. Fast ODR (And fast ODR enabled, says higher than 80Hz?)
 	SendByte( 0b00000000 ); //+/- 4 Gauss
@@ -95,7 +95,8 @@ int ReadAGM( int16_t * LINROTMAG )
 	SendStart();
 	r = SendByte( AG_ADDY );
 
-	//Not sure why, but this seems to happen frequently.
+	if( r ) return -81;
+/*	//Not sure why, but this seems to happen frequently.
 	if( r ) {
 		SendStop();
 		timeout++;
@@ -103,7 +104,7 @@ int ReadAGM( int16_t * LINROTMAG )
 			goto retry;
 		else
 			return -81;
-	}
+	}*/
 
 	SendByte( 0x17 );
 	SendStop();

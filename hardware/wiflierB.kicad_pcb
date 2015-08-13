@@ -2110,7 +2110,7 @@
     )
   )
 
-  (gr_text "WARNING: UNTESTED\nDOES NOT MATCH\nFIRMWARE" (at 68.5546 76.708) (layer Cmts.User)
+  (gr_text "WARNING: UNTESTED\nDOES NOT MATCH\nFIRMWARE\nAfter testing, inexplicably fails." (at 68.5546 76.708) (layer Cmts.User)
     (effects (font (size 5.08 5.08) (thickness 0.3)))
   )
   (gr_text FLT_BAT (at 66.3321 58.58256) (layer B.SilkS)

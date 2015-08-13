@@ -179,28 +179,16 @@ restart:
     espconn_regist_time(pHTTPServer, 15, 0); //timeout
 
 
-//	ets_wdt_disable();
+	ets_wdt_disable();
 
 	int i2ctries = 0;
 printf( "Starting I2C\n" );
 retryi2c:
 	ConfigI2C();
 
-	if( i2ctries++ > 100 )
+	if( i2ctries++ > 10 )
 	{
 		goto skip_i2c;
-	}
-
-	if( SetupAVRTool() )
-	{
-		uart0_sendStr("Retry AVRTool\r\n");
-		goto retryi2c;		
-	}
-
-	if( SetupBMP085() )
-	{
-		uart0_sendStr("Retry BMP\r\n");
-		goto retryi2c;
 	}
 
 	if( SetupLSM() )
@@ -209,6 +197,20 @@ retryi2c:
 		goto retryi2c;
 	}
 
+
+	if( SetupAVRTool() )
+	{
+		uart0_sendStr("Retry AVRTool\r\n");
+		goto retryi2c;		
+	}
+
+
+
+	if( SetupBMP085() )
+	{
+		uart0_sendStr("Retry BMP\r\n");
+		goto retryi2c;
+	}
 skip_i2c:
 
 	//Add a process

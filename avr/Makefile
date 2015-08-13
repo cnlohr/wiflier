@@ -17,8 +17,11 @@ test.hex : test.elf
 test.elf : test.c
 	$(AVRP)gcc -I  -g $(CFLAGS)   -mmcu=$(PART) -Wl,-Map,test.map -o $@ test.c -L/usr/lib/binutils/avr/2.18
 
-test.lst : test.c
-	$(AVRP)gcc -c -g -Wa,-a,-ad $(CFLAGS) test.c > $@
+#test.lst : test.c
+#	$(AVRP)gcc -c -g -Wa,-a,-ad $(CFLAGS) test.c > $@
+
+test.lst : test.elf
+	$(AVRP)objdump -S test.elf  >  test.lst
 
 burn : test.hex
 	sudo avrdude -c usbtiny -p $(PROGPART) -U flash:w:test.hex
