@@ -38,7 +38,7 @@ static uint8_t AVRSR( uint8_t data )
 	uint8_t ret = 0;
 	uint8_t i = 0x80;
 
-	_delay_us(1);
+	_delay_us(1);  //Is 8 cycles enough to service the interrupt on the AVR?
 	for( ; i != 0; i>>=1 )
 	{
 		AVRSETMOSI( ((i&data)!=0) )
@@ -52,21 +52,21 @@ static uint8_t AVRSR( uint8_t data )
 	return ret;
 }
 
-static uint32_t AVRSR4( uint32_t data )
+static uint32_t ICACHE_FLASH_ATTR AVRSR4( uint32_t data )
 {
 	uint32_t ret = 0;
 	uint32_t i = 0x80000000;
 	for( ; i != 0; i>>=1 )
 	{
 		AVRSETMOSI( ((i&data)!=0) )
-		_delay_us(2);
+		_delay_us(1);
 		AVRSCKON
 		_delay_us(2);
 		ret |= AVRGETMISO?i:0;
 		AVRSCKOFF
 	}
 
-	_delay_us(10); //XXX TODO Try to reduce this.
+	_delay_us(4); //Too short?
 
 	return ret;
 }
@@ -80,7 +80,7 @@ static int ICACHE_FLASH_ATTR EnterAVRProgramMode()
 	AVRSETRST(1);
 	_delay_us(20);
 	AVRSETRST(0);
-	_delay_ms(20); //XXX TODO try to reduce this.
+	_delay_ms(20); //XXX TODO try to reduce this?
 
 	rr = AVRSR4( 0xAC530000 );
 	if( ( rr & 0x0000ff00 ) != 0x00005300 )
@@ -110,10 +110,10 @@ static int ICACHE_FLASH_ATTR EnterAVRProgramMode()
 static int ICACHE_FLASH_ATTR WaitForAVR()
 {
 	int i;
-	for( i = 0; i < ERASE_TIMEOUT; i++ )
+	for( i = 0; i < ERASE_TIMEOUT*10; i++ )
 	{
 		if( ( AVRSR4(0xF0000000) & 1 )  == 0 ) return 0;
-		_delay_ms(1);
+		_delay_us(100);
 	}
 	return 0xFFFFBEEF;
 }
@@ -171,8 +171,8 @@ int ICACHE_FLASH_ATTR ProgramAVRFlash( uint8_t * source, uint16_t bytes )
 		bytesin+=16;
 	}
 
-//#define AVR_VERIFY
-#ifdef AVR_VERIFY
+//#define AVR_DEBUG_VERIFY
+#ifdef AVR_DEBUG_VERIFY
 	printf("\nReading\n" );
 	for( i = 0; i < (bytes+1)/2; i++ )
 	{
@@ -183,34 +183,6 @@ int ICACHE_FLASH_ATTR ProgramAVRFlash( uint8_t * source, uint16_t bytes )
 	}
 #endif
 
-/*
-
-	while( bytes - bytesin > 0 )
-	{
-		int wordsthis = (bytes - bytesin + 1) / 2;
-		if( wordsthis > 8 ) wordsthis = 8;
-
-		for( i = 0 ; i < wordsthis; i++ )
-		{
-			AVRSR4( 0x40000000 | (i << 8) | source[i*2+0] );
-			AVRSR4( 0x48000000 | (i << 8) );
-		}
-	for( i = 0; i < 8; i++ )
-	{
-		printf( "B: %08x\n", AVRSR4( 0x40000089 + (i << 8) ) ); //LSB first.
-		printf( "A: %08x\n", AVRSR4( 0x480000AB + (i << 8) ) );
-	}
-	printf( "C: %08x\n", AVRSR4( 0x4C000800 ) ); //2nd block
-
-	r = WaitForAVR(); if( r ) goto fail;
-	printf( "WF: %d\n",  );
-	
-	for( i = 0; i < 10; i++ )
-	{
-		printf( "E: %08x\n", AVRSR4( 0x20000000 + (i<<8) ) );
-		printf( "D: %08x\n", AVRSR4( 0x28000000 + (i<<8) ) );
-	}	
-*/
 	printf( "Reset AVR.\n" );
 	AVRSETRST(1);
 	_delay_ms(20);
@@ -242,7 +214,7 @@ void InitAVRSoftSPI()
 
 int wason = 0;
 
-void TickAVRSoftSPI( int slow )
+void ICACHE_FLASH_ATTR TickAVRSoftSPI( int slow )
 {
 //	if( !slow ) return;
 

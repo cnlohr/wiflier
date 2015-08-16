@@ -74,7 +74,7 @@ static void ICACHE_FLASH_ATTR
 
 	TickAVRSoftSPI(1);
 
-	uart0_sendStr(".");
+	uart0_sendStr("_");
 }
 
 

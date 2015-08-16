@@ -68,7 +68,7 @@ int ICACHE_FLASH_ATTR CustomCommand(char * buffer, int retsize, char *pusrdata, 
 
 			int r = ProgramAVRFlash( (uint8_t*)0x40200000+from, len );
 
-			if( !r )
+			if( r )
 			{
 				buffend += ets_sprintf( buffend, "!CAF\t%d\r\n", r );
 			}

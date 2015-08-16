@@ -80,7 +80,7 @@ uint8_t mag_ready;
 
 
 //
-uint16_t last_agt[7];
+int16_t last_agt[7];
 
 uint8_t bmp280dat[6];
 
@@ -88,6 +88,7 @@ int main( )
 {
 	int r;
 	cli();
+	PORTA = PORTB = 0;
 	CCP = 0xD8;
 	CLKPR = 0x00;  //Disable scaling.
 //	OSCCAL0 = 0x80; //Changing this will make it not use factory cal.
@@ -102,19 +103,20 @@ int main( )
 
 	TCCR1A = _BV(WGM10) | _BV(COM1B1) | _BV(COM1A1) | _BV(COM1B0) | _BV(COM1A0);
 	TCCR1B = _BV(WGM12) | _BV(CS10);
-	TCCR2A = _BV(WGM20) | _BV(COM2B1) | _BV(COM2A1) | _BV(COM1B0) | _BV(COM1A0);
+	TCCR2A = _BV(WGM20) | _BV(COM2B1) | _BV(COM2A1) | _BV(COM2B0) | _BV(COM2A0);
 	TCCR2B = _BV(WGM22) | _BV(CS20);
 
-	//Outputs on TOCC0,1,2,6
+	//Outputs on TOCC0,1,2,7
 	TOCPMSA0 = _BV(TOCC0S0) //Map 1B to TOCC0 (MTR0) (OCR1BL)
 			| _BV(TOCC1S0)  //Map 1A to TOCC1 (MTR1) (OCR1AL)
 			| _BV(TOCC2S1); //Map 2B to TOCC2 (MTR2) (OCR2BL)
 	TOCPMSA1 = _BV(TOCC7S1);//Map 2A to TOCC7 (MTR3) (OCR2AL)
 
-	TOCPMCOE = _BV(TOCC0OE) | _BV(TOCC1OE) | _BV(TOCC2OE) | _BV(TOCC6OE);
+	TOCPMCOE = _BV(TOCC0OE) | _BV(TOCC1OE) | _BV(TOCC2OE) | _BV(TOCC7OE);
 
+	//Enable Motor outputs
 	DDRA |= _BV(1) | _BV(2) | _BV(3);
-	DDRB |= _BV(7); //Enable outputs
+	DDRB |= _BV(2);
 
 	//Set up ADC to read battery voltage.
 	ADMUXA = 0b001101; //1.1v for reading
@@ -124,9 +126,6 @@ int main( )
 
 	//Set up TWI pullups to help the bus.
 	PUEB |= _BV(0) | _BV(1);
-
-	DDRA = 0x0e;
-
 
 	//Set up the main system ticker.
 	TCCR0A = _BV(WGM00) | _BV(WGM01); //Fast PWM (though we don't use the PWM)
@@ -193,7 +192,7 @@ int main( )
 			r = ReadAG( last_agt );
 			if( r )
 			{
-				PromptVal( PSTR("AG:"), last_agt[3] );
+//				PromptVal( PSTR("AX:"), last_agt[3] );
 
 				//XXX Do something with this data.
 				reads++;
@@ -206,9 +205,14 @@ int main( )
 			TIFR0 |= _BV(OCF0A);
 
 			i++;
+			OCR1BL = i;
+			OCR1AL = i;
+			OCR2BL = i;
+			OCR2AL = i;
+
 			if( ( i%125 ) == 0 )
 			{
-//				PromptVal( PSTR("R:"), reads );
+				PromptVal( PSTR("39aaa:"), reads ); reads = 0;
 //				PromptVal( PSTR("E:"), r );
 //				PromptVal( PSTR("K:"), last_agt[0] );
 

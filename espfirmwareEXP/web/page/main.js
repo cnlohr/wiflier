@@ -2,78 +2,49 @@
 //
 //This particular file may be licensed under the MIT/x11, New BSD or ColorChord Licenses.
 
-
-is_leds_running = false;
-pause_led = false;
-
-function KickLEDs()
+function AVRStatusCallback( is_ok, comment, pushop )
 {
-	$( "#LEDPauseButton" ).css( "background-color", (is_leds_running&&!pause_led)?"green":"red" );
-
-	if( !is_leds_running && !pause_led )
-		LEDDataTicker();
-
-}
-
-window.addEventListener("load", KickLEDs, false);
-
-function ToggleLEDPause()
-{
-	pause_led = !pause_led;
-	KickLEDs();
-}
-
-
-function GotLED(req,data)
-{
-	var ls = document.getElementById('LEDCanvasHolder');
-	var canvas = document.getElementById('LEDCanvas');
-	var ctx = canvas.getContext('2d');
-	var h = ls.height;
-	var w = ls.width;
-	if( canvas.width != ls.clientWidth-10 )   canvas.width = ls.clientWidth-10;
-	if( ctx.canvas.width != canvas.clientWidth )   ctx.canvas.width = canvas.clientWidth;
-
-	var secs = data.split( ":" );
-
-	$( "#LEDPauseButton" ).css( "background-color", "green" );
-
-	var samps = Number( secs[1] );
-	var data = secs[2];
-	var lastsamp = parseInt( data.substr(0,4),16 );
-	ctx.clearRect( 0, 0, canvas.width, canvas.height );
-
-	for( var i = 0; i < samps; i++ )
+	if( is_ok )
 	{
-		var x2 = i * canvas.clientWidth / samps;
-		var samp = data.substr(i*6,6);
-		var y2 = ( 1.-samp / 2047 ) * canvas.clientHeight;
-
-		ctx.fillStyle = "#" + samp.substr( 2, 2 ) + samp.substr( 0, 2 ) + samp.substr( 4, 2 );
-		ctx.lineWidth = 0;
-		ctx.fillRect( x2, 0, canvas.clientWidth / samps+1, canvas.clientHeight );
-	}
-
-	var samp = parseInt( data.substr(i*2,2),16 );
-
-	LEDDataTicker();
-} 
-
-function LEDDataTicker()
-{
-	if( IsTabOpen('LEDs') && !pause_led )
-	{
-		is_leds_running = true;
-		QueueOperation( "CL",  GotLED );
+		$("#innerflashtext").html( comment );
+		if( pushop.place == pushop.padlen )
+		{
+			var sendstr = "CAF" + flash_scratchpad_at + "\t" + pushop.padlen + "\t" + faultylabs.MD5( pushop.paddata ).toLowerCase() + "\n";
+			var fun = function( fsrd, flashresponse ) { $("#innerflashtext").html( (flashresponse[0] == '!')?"Flashing failed.":"Flash success." ) };
+			QueueOperation( sendstr, fun); 
+			return false;
+		}
 	}
 	else
 	{
-		is_leds_running = 0;
+		$("#innerflashtext").html( "Failed: " + comment );
 	}
-	$( "#LEDPauseButton" ).css( "background-color", (is_leds_running&&!pause_led)?"green":"red" );
-
+	return true;
 }
 
+function DragDropAVRFile(file)
+{
+	if( file.length != 1 )
+	{
+		$("#innerflashtext").html( "Need exactly one file." );
+		return;
+	}
+	if( file[0].size > 8192 )
+	{
+		$("#innerflashtext").html( "File too big to fit on AVR." );
+		return;
+	}
 
+	$("#innerflashtext").html( "Opening " + file[0].name );
+
+	var reader = new FileReader();
+
+	reader.onload = function(e) {
+		PushImageTo( e.target.result, flash_scratchpad_at, AVRStatusCallback );
+	}
+
+	
+	reader.readAsArrayBuffer( file[0] );
+}
 
 
