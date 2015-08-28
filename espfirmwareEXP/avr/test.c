@@ -86,7 +86,7 @@ uint8_t bmp280dat[6];
 
 int main( )
 {
-	int r;
+	int r, i;
 	cli();
 	PORTA = PORTB = 0;
 	CCP = 0xD8;
@@ -138,12 +138,17 @@ int main( )
 	SPCR |= _BV(SPIE);
 	SPCR |= _BV(SPE);
 
-	sei();
-
+retry:
+	i++;
+	_delay_ms(1);
 	r = InitLSM9DS1();
 	PromptVal( PSTR("LSM:"), r );
+	if( r ) { i++; if( i < 100 ) goto retry; }
 	r = InitBMP280();
 	PromptVal( PSTR("BMP280:"), r );
+	if( r ) { i++; if( i < 200 ) goto retry; }
+
+	sei();
 
 /*	uint16_t ccv[6];
 	r = GetBMPCalVals( 0, (uint8_t*)ccv );
@@ -160,6 +165,16 @@ int main( )
 	while(1)
 	{
 
+		uint8_t rxsize = (rxhead - rxtail + RXBS)%RXBS;
+
+		if( rxsize )
+		{
+			uint8_t exp = rxbuffer[rxtail] & 0x0f;
+			if( rxsize >= exp )
+			{
+				PopPacket();
+			}
+		}
 
 		//Create magnetometer data at ~30 Hz.
 		{
@@ -186,6 +201,7 @@ int main( )
 				}
 			}
 		}
+
 
 		{
 			//int16_t agtdata[7];
