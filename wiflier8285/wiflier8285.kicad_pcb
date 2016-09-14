@@ -65,7 +65,7 @@
     (grid_origin 66.0654 65.13068)
     (visible_elements FFFFFFEF)
     (pcbplotparams
-      (layerselection 0x00030_80000001)
+      (layerselection 0x010f8_80000001)
       (usegerberextensions true)
       (excludeedgelayer false)
       (linewidth 0.150000)
@@ -88,7 +88,7 @@
       (mirror false)
       (drillshape 0)
       (scaleselection 1)
-      (outputdirectory wiflierEXPA))
+      (outputdirectory wiflier8285))
   )
 
   (net 0 "")
